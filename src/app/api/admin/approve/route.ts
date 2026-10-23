@@ -71,6 +71,7 @@ export async function POST(request: Request) {
 
     // Extract connections from plan
     const connections = signup.plan_id.includes('-5') ? 5 :
+                       signup.plan_id.includes('-4') ? 4 :
                        signup.plan_id.includes('-3') ? 3 :
                        signup.plan_id.includes('-2') ? 2 : 1
 
