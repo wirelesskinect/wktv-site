@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
     let planName = providedPlanName || '1 Month';
 
     // Validate amount is one of our valid plans
-    const validAmounts = [2000, 9000, 15000, 39900]; // $20, $90, $150, $399 Lifetime
+    const validAmounts = [2000, 3000, 17500, 22500, 25000, 27500, 30000, 60000, 80000]; // current WKTV plan prices
     if (!amountCents || !validAmounts.includes(amountCents)) {
       console.error('Invalid amount received:', amountCents);
       return NextResponse.json({ error: 'Invalid plan selected' }, { status: 400 });
