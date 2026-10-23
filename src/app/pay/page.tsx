@@ -8,14 +8,15 @@ import { siteConfig } from '@/config/site'
 
 const PLANS: Record<string, { name: string; price: number; connections: number; duration: string }> = {
   'trial-free': { name: 'Free 24-Hour Trial', price: 0, connections: 1, duration: '24 hours' },
-  'trial-1mo': { name: '1-Month Trial', price: 15, connections: 1, duration: '1 month' },
-  'monthly-1': { name: 'Monthly', price: 25, connections: 1, duration: '1 month' },
-  'annual-1': { name: '1 Connection Annual', price: 150, connections: 1, duration: '1 year' },
-  'annual-2': { name: '2 Connections Annual', price: 200, connections: 2, duration: '1 year' },
-  'annual-3': { name: '3 Connections Annual', price: 230, connections: 3, duration: '1 year' },
-  'annual-5': { name: '5 Connections Annual', price: 280, connections: 5, duration: '1 year' },
+  'trial-1mo': { name: '1-Month Trial', price: 20, connections: 1, duration: '1 month' },
+  'monthly-1': { name: 'Monthly', price: 30, connections: 1, duration: '1 month' },
+  'annual-1': { name: '1 Connection Annual', price: 175, connections: 1, duration: '1 year' },
+  'annual-2': { name: '2 Connections Annual', price: 225, connections: 2, duration: '1 year' },
+  'annual-3': { name: '3 Connections Annual', price: 250, connections: 3, duration: '1 year' },
+  'annual-4': { name: '4 Connections Annual', price: 275, connections: 4, duration: '1 year' },
+  'annual-5': { name: '5 Connections Annual', price: 300, connections: 5, duration: '1 year' },
   'lifetime-1': { name: 'Lifetime 1 Connection', price: 600, connections: 1, duration: 'lifetime' },
-  'lifetime-5': { name: 'Lifetime 5 Connections', price: 850, connections: 5, duration: 'lifetime' },
+  'lifetime-5': { name: 'Lifetime 5 Connections', price: 800, connections: 5, duration: 'lifetime' },
 }
 
 function PaymentContent() {
