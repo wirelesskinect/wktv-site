@@ -24,20 +24,21 @@ export const siteConfig = {
   plans: {
     trial: [
       { id: 'trial-free', name: 'Free 24-Hour Trial', price: 0, connections: 1, duration: '24 hours' },
-      { id: 'trial-1mo', name: '1-Month Trial', price: 15, connections: 1, duration: '1 month' },
+      { id: 'trial-1mo', name: '1-Month Trial', price: 20, connections: 1, duration: '1 month' },
     ],
     monthly: [
-      { id: 'monthly-1', name: 'Monthly', price: 25, connections: 1, duration: 'month', extra: '+$15/additional connection' },
+      { id: 'monthly-1', name: 'Monthly', price: 30, connections: 1, duration: 'month' },
     ],
     annual: [
-      { id: 'annual-1', name: '1 Connection', price: 150, connections: 1, duration: 'year' },
-      { id: 'annual-2', name: '2 Connections', price: 200, connections: 2, duration: 'year', label: 'Family' },
-      { id: 'annual-3', name: '3 Connections', price: 230, connections: 3, duration: 'year', label: 'Family' },
-      { id: 'annual-5', name: '5 Connections', price: 280, connections: 5, duration: 'year', label: 'Best Value', featured: true },
+      { id: 'annual-1', name: '1 Connection', price: 175, connections: 1, duration: 'year' },
+      { id: 'annual-2', name: '2 Connections', price: 225, connections: 2, duration: 'year', label: 'Family' },
+      { id: 'annual-3', name: '3 Connections', price: 250, connections: 3, duration: 'year', label: 'Family' },
+      { id: 'annual-4', name: '4 Connections', price: 275, connections: 4, duration: 'year', label: 'Family' },
+      { id: 'annual-5', name: '5 Connections', price: 300, connections: 5, duration: 'year', label: 'Best Value', featured: true },
     ],
     lifetime: [
       { id: 'lifetime-1', name: '1 Connection', price: 600, connections: 1, duration: 'lifetime' },
-      { id: 'lifetime-5', name: '5 Connections', price: 850, connections: 5, duration: 'lifetime' },
+      { id: 'lifetime-5', name: '5 Connections', price: 800, connections: 5, duration: 'lifetime' },
     ],
   },
   
