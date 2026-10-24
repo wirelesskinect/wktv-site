@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
+import { getPlan } from '@/lib/plans'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -11,6 +12,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [planId, setPlanId] = useState<string | null>(null)
+
+  // If they came from a plan on the homepage, keep that plan through login
+  useEffect(() => {
+    const plan = getPlan(new URLSearchParams(window.location.search).get('plan'))
+    setPlanId(plan ? plan.id : null)
+  }, [])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -32,7 +40,7 @@ export default function LoginPage() {
         return
       }
 
-      router.push('/dashboard')
+      router.push(planId ? `/pay?plan=${planId}` : '/dashboard')
     } catch (err) {
       setError('Something went wrong. Please try again.')
       setLoading(false)
@@ -96,7 +104,7 @@ export default function LoginPage() {
 
           <p className="text-center text-gray-500 mt-6">
             Don't have an account?{' '}
-            <Link href="/signup" className="text-red-500 font-medium hover:underline">
+            <Link href={planId ? `/signup?plan=${planId}` : '/signup'} className="text-red-500 font-medium hover:underline">
               Sign up
             </Link>
           </p>
