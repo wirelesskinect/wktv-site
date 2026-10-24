@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { siteConfig } from '@/config/site'
 import { getPlan, connectionUpgrades } from '@/lib/plans'
 import ConnectionWarning from '@/components/ConnectionWarning'
+import { USERNAME_RULE, PASSWORD_RULE, normalizeUsername, usernameError, passwordError } from '@/lib/iptv-login'
 
 
 function PaymentContent() {
@@ -24,6 +25,11 @@ function PaymentContent() {
   const alreadyConfirmed = searchParams.get('confirmed') === '1'
   const [showWarning, setShowWarning] = useState(false)
   const [copied, setCopied] = useState(false)
+  // New customers (no TV line yet) choose the login they'll type into the IPTV app
+  const [needsLogin, setNeedsLogin] = useState(false)
+  const [iptvUsername, setIptvUsername] = useState('')
+  const [iptvPassword, setIptvPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
 
   useEffect(() => {
     checkAuth()
@@ -43,16 +49,16 @@ function PaymentContent() {
         return
       }
       setUser(data.user)
+      let sub: any = null
+      try {
+        sub = await (await fetch('/api/subscription', { cache: 'no-store' })).json()
+      } catch {}
+      // No line on file yet -> they pick their TV app username and password here
+      setNeedsLogin(!sub?.username)
       // First-time customers (no plan on file yet) get the add-connections warning
       // before they see payment instructions, since connections can't be added later.
       if (!alreadyConfirmed && connectionUpgrades(plan).length > 0) {
-        try {
-          const subRes = await fetch('/api/subscription')
-          const sub = await subRes.json()
-          if (sub?.status === 'unlinked' || sub?.status === 'pending') setShowWarning(true)
-        } catch {
-          setShowWarning(true)
-        }
+        if (!sub || sub.status === 'unlinked' || sub.status === 'pending') setShowWarning(true)
       }
     } catch {
       router.push(`/signup?plan=${planId}`)
@@ -83,17 +89,62 @@ function PaymentContent() {
     }
   }
 
+  // Returns the login fields to send, or null (and shows an error) if they're not valid
+  function loginFields(): Record<string, string> | null {
+    if (!needsLogin) return {}
+    const uname = normalizeUsername(iptvUsername)
+    const problem = usernameError(uname) || passwordError(iptvPassword.trim(), uname)
+    if (problem) {
+      setError(problem)
+      return null
+    }
+    return { iptvUsername: uname, iptvPassword: iptvPassword.trim() }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!plan) return
+    const login = loginFields()
+    if (!login) return
     if (!cashAppName.trim()) {
       setError('Please enter your Cash App name')
       return
     }
-    
-    // Only the plan and Cash App name are sent; the server sets the price
-    await submitRequest({ planId: plan.id, cashAppName: cashAppName.trim() })
+
+    // Only the plan, login choice and Cash App name are sent; the server sets the price
+    await submitRequest({ planId: plan.id, cashAppName: cashAppName.trim(), ...login })
   }
+
+  async function handleTrial(e: React.FormEvent) {
+    e.preventDefault()
+    if (!plan) return
+    const login = loginFields()
+    if (!login) return
+    await submitRequest({ planId: plan.id, ...login })
+  }
+
+  const loginBlock = needsLogin ? (
+    <div className="mb-6">
+      <p className="field-label">Your TV app login</p>
+      <p className="field-hint" style={{ marginTop: 0, marginBottom: 12 }}>
+        Pick the username and password you’ll type into the WKTV / IPTV app. They’ll work as soon as we activate your plan.
+      </p>
+      <label htmlFor="iptv-username" className="field-label" style={{ fontSize: 13 }}>Username</label>
+      <input id="iptv-username" type="text" value={iptvUsername} autoComplete="off" autoCapitalize="none" spellCheck={false}
+        onChange={(e) => setIptvUsername(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''))}
+        placeholder="e.g. tony24" maxLength={16} required />
+      <p className="field-hint">{USERNAME_RULE}.</p>
+      <label htmlFor="iptv-password" className="field-label mt-4" style={{ fontSize: 13 }}>Password</label>
+      <div className="flex gap-2">
+        <input id="iptv-password" type={showPassword ? 'text' : 'password'} value={iptvPassword} autoComplete="new-password"
+          onChange={(e) => setIptvPassword(e.target.value.replace(/[^A-Za-z0-9]/g, ''))}
+          placeholder="Easy to type on a TV remote" maxLength={20} required />
+        <button type="button" className="btn-secondary" style={{ minHeight: 40, padding: '8px 14px', fontSize: 13 }}
+          onClick={() => setShowPassword((v) => !v)}>{showPassword ? 'Hide' : 'Show'}</button>
+      </div>
+      <p className="field-hint">{PASSWORD_RULE}. Don’t reuse your email password. You can always see it on your account page.</p>
+    </div>
+  ) : null
 
   if (checkingAuth || !plan) {
     return (
@@ -140,10 +191,13 @@ function PaymentContent() {
             <li>✓&nbsp; 1 connection on your favorite device</li>
             <li>✓&nbsp; Choose a plan anytime from your account</li>
           </ul>
-          {error && <div className="alert alert-error mb-4">{error}</div>}
-          <button onClick={() => submitRequest({ planId: plan.id })} disabled={loading} className="btn-primary w-full">
-            {loading ? 'Requesting…' : 'Request my free trial →'}
-          </button>
+          <form onSubmit={handleTrial}>
+            {loginBlock}
+            {error && <div className="alert alert-error mb-4">{error}</div>}
+            <button type="submit" disabled={loading} className="btn-primary w-full">
+              {loading ? 'Requesting…' : 'Request my free trial →'}
+            </button>
+          </form>
           <p className="text-center text-sm text-muted mt-5">
             Rather pick a plan? <Link href="/renew" className="link">See all plans</Link>
           </p>
@@ -199,6 +253,7 @@ function PaymentContent() {
 
         {/* Step 2: Confirm */}
         <form onSubmit={handleSubmit}>
+          {loginBlock}
           <label htmlFor="cashapp" className="field-label"><span className="text-red">02</span>&nbsp; Your Cash App name or $Cashtag</label>
           <input id="cashapp" type="text" value={cashAppName} onChange={(e) => setCashAppName(e.target.value)}
             placeholder="$yourcashtag or display name" maxLength={60} required />

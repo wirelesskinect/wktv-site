@@ -15,10 +15,11 @@ interface User {
 interface SubscriptionData {
   status: 'active' | 'expired' | 'pending' | 'unlinked'
   username?: string
+  password?: string | null
   expiryDate?: string
   daysRemaining?: number | null
   planName?: string
-  pendingRequest?: { planName: string; amount: number; method: string; requestedAt: string } | null
+  pendingRequest?: { planName: string; amount: number; method: string; requestedAt: string; username?: string | null } | null
 }
 
 const FB_GROUP = 'https://www.facebook.com/groups/wktvsupport'
@@ -28,7 +29,11 @@ export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null)
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState<'user' | 'pass' | null>(null)
+  const [showPass, setShowPass] = useState(false)
+  const copy = (text: string, which: 'user' | 'pass') => {
+    navigator.clipboard?.writeText(text).then(() => { setCopied(which); setTimeout(() => setCopied(null), 1500) }).catch(() => {})
+  }
 
   useEffect(() => {
     (async () => {
@@ -88,6 +93,9 @@ export default function DashboardPage() {
                     : 'Your account is being set up. We’ll activate it shortly.'
                   : 'Your account is ready. Pick a plan or start a free trial to begin streaming.'}
               </p>
+              {status === 'pending' && subscription?.pendingRequest?.username && (
+                <p className="text-sm mb-6">Your TV app username will be <b>{subscription.pendingRequest.username}</b>, with the password you chose. Your login details will show here once your plan is active.</p>
+              )}
               {status === 'pending' ? (
                 <a href="/support.html#connect" className="btn-secondary">Get your device ready while you wait</a>
               ) : (
@@ -117,9 +125,23 @@ export default function DashboardPage() {
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-lg font-bold break-all">{subscription?.username || '—'}</p>
                     {subscription?.username && (
-                      <button type="button" className="text-xs link" onClick={() => {
-                        navigator.clipboard?.writeText(subscription.username || '').then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) }).catch(() => {})
-                      }}>{copied ? 'Copied ✓' : 'Copy'}</button>
+                      <button type="button" className="text-xs link" onClick={() => copy(subscription.username || '', 'user')}>
+                        {copied === 'user' ? 'Copied ✓' : 'Copy'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="tile">
+                  <p className="text-xs uppercase tracking-widest text-muted mb-1">IPTV password</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-lg font-bold break-all">{subscription?.password ? (showPass ? subscription.password : '••••••••') : '—'}</p>
+                    {subscription?.password && (
+                      <span className="flex gap-3">
+                        <button type="button" className="text-xs link" onClick={() => setShowPass((v) => !v)}>{showPass ? 'Hide' : 'Show'}</button>
+                        <button type="button" className="text-xs link" onClick={() => copy(subscription.password || '', 'pass')}>
+                          {copied === 'pass' ? 'Copied ✓' : 'Copy'}
+                        </button>
+                      </span>
                     )}
                   </div>
                 </div>

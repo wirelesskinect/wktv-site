@@ -14,6 +14,7 @@ interface PendingSignup {
   amount_cents: number
   payment_method: string
   cashapp_name: string
+  requested_username?: string | null
   status: string
   notes: string | null
   created_at: string
@@ -241,6 +242,9 @@ export default function AdminPage() {
                     <td className="py-4">
                       <div className="font-medium">{signup.name}</div>
                       <div className="text-sm text-gray-500">{signup.email}</div>
+                      {signup.requested_username && (
+                        <div className="text-sm text-gray-400">Wants login: <b>{signup.requested_username}</b></div>
+                      )}
                       {signup.phone && (
                         <div className="text-sm text-gray-500">{signup.phone}</div>
                       )}
