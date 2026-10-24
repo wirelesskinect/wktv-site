@@ -4,13 +4,16 @@ import { useState, Suspense } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { getPlan } from '@/lib/plans'
+import { getPlan, connectionUpgrades, SIGNUP_PLAN_OPTIONS, type Plan } from '@/lib/plans'
+import ConnectionWarning from '@/components/ConnectionWarning'
 
 function SignupContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  // Only a real plan from the homepage counts; otherwise this is a plain account signup
-  const plan = getPlan(searchParams.get('plan'))
+  // Start with the plan picked on the homepage (if any); the customer can change it here
+  const [planId, setPlanId] = useState<string>(getPlan(searchParams.get('plan'))?.id || '')
+  const plan = getPlan(planId)
+  const [showWarning, setShowWarning] = useState(false)
   
   const [formData, setFormData] = useState({
     name: '',
@@ -23,6 +26,16 @@ function SignupContent() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError('')
+    // Last chance to add connections: they can only be chosen at first signup
+    if (plan && connectionUpgrades(plan).length > 0) {
+      setShowWarning(true)
+      return
+    }
+    await createAccount(plan)
+  }
+
+  const createAccount = async (finalPlan: Plan | null) => {
     setError('')
     setLoading(true)
 
@@ -41,8 +54,8 @@ function SignupContent() {
         return
       }
 
-      // Plan picked on the homepage -> straight to checkout. No plan -> account page.
-      router.push(plan ? `/pay?plan=${plan.id}` : '/dashboard')
+      // Plan chosen -> straight to checkout (warning already shown). No plan -> account page.
+      router.push(finalPlan ? `/pay?plan=${finalPlan.id}&confirmed=1` : '/dashboard')
     } catch (err) {
       setError('Something went wrong. Please try again.')
       setLoading(false)
@@ -66,15 +79,40 @@ function SignupContent() {
             {plan ? 'Create your account, then complete your order' : 'Sign up to start streaming'}
           </p>
 
-          {plan && (
-            <div className="mb-6 p-4 border border-gray-700 rounded flex justify-between items-center">
-              <div>
-                <p className="text-xs text-gray-400 uppercase tracking-wide">Selected plan</p>
-                <p className="font-semibold">{plan.name}</p>
-              </div>
-              <p className="text-xl font-bold text-red-500">{plan.price === 0 ? 'FREE' : `$${plan.price}`}</p>
-            </div>
-          )}
+          <div className="mb-6">
+            <label htmlFor="plan-select" className="block text-sm font-medium text-gray-300 mb-2">Choose your plan</label>
+            <select
+              id="plan-select"
+              value={planId}
+              onChange={(e) => setPlanId(e.target.value)}
+              className="w-full bg-black border border-gray-700 rounded px-4 py-3 text-white focus:border-red-500 focus:outline-none"
+            >
+              <option value="">Create my account now, pick a plan later</option>
+              <optgroup label="Try it first">
+                {SIGNUP_PLAN_OPTIONS.filter((p) => p.kind === 'trial').map((p) => (
+                  <option key={p.id} value={p.id}>{p.name} — {p.price === 0 ? 'FREE' : `$${p.price}`}</option>
+                ))}
+              </optgroup>
+              <optgroup label="Monthly">
+                {SIGNUP_PLAN_OPTIONS.filter((p) => p.kind === 'monthly').map((p) => (
+                  <option key={p.id} value={p.id}>{p.name} (1 connection) — ${p.price}/month</option>
+                ))}
+              </optgroup>
+              <optgroup label="Annual">
+                {SIGNUP_PLAN_OPTIONS.filter((p) => p.kind === 'annual').map((p) => (
+                  <option key={p.id} value={p.id}>{p.connections} connection{p.connections > 1 ? 's' : ''} — ${p.price}/year{p.badge ? ` (${p.badge})` : ''}</option>
+                ))}
+              </optgroup>
+              <optgroup label="Lifetime (one-time payment)">
+                {SIGNUP_PLAN_OPTIONS.filter((p) => p.kind === 'lifetime').map((p) => (
+                  <option key={p.id} value={p.id}>{p.connections} connection{p.connections > 1 ? 's' : ''} — ${p.price} one-time</option>
+                ))}
+              </optgroup>
+            </select>
+            {plan && plan.connections < 5 && connectionUpgrades(plan).length > 0 && (
+              <p className="mt-2 text-xs text-yellow-400">⚠ Extra connections can only be added at sign-up, not later.</p>
+            )}
+          </div>
 
           <form onSubmit={handleSignup} className="space-y-5">
             {error && (
@@ -153,6 +191,20 @@ function SignupContent() {
           <Link href="/" className="hover:text-white">← Back to Home</Link>
         </p>
       </div>
+
+      {plan && (
+        <ConnectionWarning
+          plan={plan}
+          open={showWarning}
+          busy={loading}
+          onClose={() => setShowWarning(false)}
+          onChoose={(chosen) => {
+            setPlanId(chosen.id)
+            setShowWarning(false)
+            createAccount(chosen)
+          }}
+        />
+      )}
     </div>
   )
 }
