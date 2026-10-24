@@ -5,7 +5,8 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { siteConfig } from '@/config/site'
-import { getPlan } from '@/lib/plans'
+import { getPlan, connectionUpgrades } from '@/lib/plans'
+import ConnectionWarning from '@/components/ConnectionWarning'
 
 
 function PaymentContent() {
@@ -20,6 +21,9 @@ function PaymentContent() {
   const [success, setSuccess] = useState(false)
   const [user, setUser] = useState<any>(null)
   const [checkingAuth, setCheckingAuth] = useState(true)
+  // Already confirmed on the signup page? Then don't ask again.
+  const alreadyConfirmed = searchParams.get('confirmed') === '1'
+  const [showWarning, setShowWarning] = useState(false)
 
   useEffect(() => {
     checkAuth()
@@ -39,6 +43,17 @@ function PaymentContent() {
         return
       }
       setUser(data.user)
+      // First-time customers (no plan on file yet) get the add-connections warning
+      // before they see payment instructions, since connections can't be added later.
+      if (!alreadyConfirmed && connectionUpgrades(plan).length > 0) {
+        try {
+          const subRes = await fetch('/api/subscription')
+          const sub = await subRes.json()
+          if (sub?.status === 'unlinked' || sub?.status === 'pending') setShowWarning(true)
+        } catch {
+          setShowWarning(true)
+        }
+      }
     } catch {
       router.push(`/signup?plan=${planId}`)
     } finally {
@@ -232,6 +247,16 @@ function PaymentContent() {
           <Link href="/" className="hover:text-white">← Back to Home</Link>
         </p>
       </div>
+
+      <ConnectionWarning
+        plan={plan}
+        open={showWarning}
+        onClose={() => setShowWarning(false)}
+        onChoose={(chosen) => {
+          setShowWarning(false)
+          if (chosen.id !== plan.id) router.replace(`/pay?plan=${chosen.id}&confirmed=1`)
+        }}
+      />
     </div>
   )
 }
