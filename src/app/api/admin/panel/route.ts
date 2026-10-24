@@ -26,10 +26,13 @@ export async function GET(req: NextRequest) {
 
   try {
     const account = await accountInfo()
-    // Only show harmless account fields
+    // Only show a fixed list of harmless account fields (the panel also returns
+    // things like 2FA secrets and cookie values, which must never leave the server)
+    const SAFE_FIELDS = ['username', 'credits', 'status', 'reseller_dns', 'is_master_reseller', 'last_login']
+    const raw = account?.data ?? account ?? {}
     const summary: Record<string, unknown> = {}
-    for (const [k, v] of Object.entries(account?.data ?? account ?? {})) {
-      if (/pass|token|secret|key/i.test(k)) continue
+    for (const k of SAFE_FIELDS) {
+      const v = raw[k]
       if (v === null || ['string', 'number', 'boolean'].includes(typeof v)) summary[k] = v
     }
     const [official, trial] = await Promise.all([
