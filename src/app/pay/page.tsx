@@ -16,7 +16,7 @@ const PLANS: Record<string, { name: string; price: number; connections: number; 
   'annual-4': { name: '4 Connections Annual', price: 275, connections: 4, duration: '1 year' },
   'annual-5': { name: '5 Connections Annual', price: 300, connections: 5, duration: '1 year' },
   'lifetime-1': { name: 'Lifetime 1 Connection', price: 600, connections: 1, duration: 'lifetime' },
-  'lifetime-5': { name: 'Lifetime 5 Connections', price: 800, connections: 5, duration: 'lifetime' },
+  'lifetime-5': { name: 'Lifetime 5 Connections', price: 850, connections: 5, duration: 'lifetime' },
 }
 
 function PaymentContent() {
