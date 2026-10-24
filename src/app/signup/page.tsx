@@ -4,11 +4,13 @@ import { useState, Suspense } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { getPlan } from '@/lib/plans'
 
 function SignupContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const planId = searchParams.get('plan') || 'annual-1'
+  // Only a real plan from the homepage counts; otherwise this is a plain account signup
+  const plan = getPlan(searchParams.get('plan'))
   
   const [formData, setFormData] = useState({
     name: '',
@@ -39,8 +41,8 @@ function SignupContent() {
         return
       }
 
-      // Redirect to payment page with plan
-      router.push(`/pay?plan=${planId}`)
+      // Plan picked on the homepage -> straight to checkout. No plan -> account page.
+      router.push(plan ? `/pay?plan=${plan.id}` : '/dashboard')
     } catch (err) {
       setError('Something went wrong. Please try again.')
       setLoading(false)
@@ -60,7 +62,19 @@ function SignupContent() {
         {/* Card */}
         <div className="card">
           <h1 className="text-2xl font-bold text-center mb-2 tracking-tight">CREATE ACCOUNT</h1>
-          <p className="text-gray-400 text-center mb-8">Sign up to start streaming</p>
+          <p className="text-gray-400 text-center mb-8">
+            {plan ? 'Create your account, then complete your order' : 'Sign up to start streaming'}
+          </p>
+
+          {plan && (
+            <div className="mb-6 p-4 border border-gray-700 rounded flex justify-between items-center">
+              <div>
+                <p className="text-xs text-gray-400 uppercase tracking-wide">Selected plan</p>
+                <p className="font-semibold">{plan.name}</p>
+              </div>
+              <p className="text-xl font-bold text-red-500">{plan.price === 0 ? 'FREE' : `$${plan.price}`}</p>
+            </div>
+          )}
 
           <form onSubmit={handleSignup} className="space-y-5">
             {error && (
@@ -123,13 +137,13 @@ function SignupContent() {
               disabled={loading}
               className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Creating Account...' : 'Continue to Payment'}
+              {loading ? 'Creating Account...' : plan ? (plan.price === 0 ? 'Create Account & Start Trial' : 'Create Account & Continue') : 'Create Account'}
             </button>
           </form>
 
           <p className="text-center text-gray-500 mt-6">
             Already have an account?{' '}
-            <Link href="/login" className="text-red-500 font-medium hover:underline">
+            <Link href={plan ? `/login?plan=${plan.id}` : '/login'} className="text-red-500 font-medium hover:underline">
               Sign in
             </Link>
           </p>
