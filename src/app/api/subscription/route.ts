@@ -19,13 +19,13 @@ export async function GET(request: NextRequest) {
     // Most recent plan request still waiting for admin confirmation (if any)
     const { data: openRequests } = await adminSupabase
       .from('pending_signups')
-      .select('plan_name, amount_cents, payment_method, created_at')
+      .select('plan_name, amount_cents, payment_method, created_at, requested_username')
       .eq('user_id', effectiveUserId)
       .eq('status', 'pending')
       .order('created_at', { ascending: false })
       .limit(1)
     const pendingRequest = openRequests && openRequests.length
-      ? { planName: openRequests[0].plan_name, amount: Math.round((openRequests[0].amount_cents || 0) / 100), method: openRequests[0].payment_method, requestedAt: openRequests[0].created_at }
+      ? { planName: openRequests[0].plan_name, amount: Math.round((openRequests[0].amount_cents || 0) / 100), method: openRequests[0].payment_method, requestedAt: openRequests[0].created_at, username: openRequests[0].requested_username || null }
       : null
     
     // Check for linked subscription
@@ -86,6 +86,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       status: daysRemaining === null ? subscription.status : (daysRemaining > 0 ? 'active' : 'expired'),
       username: subscription.iptv_username,
+      // Only ever returned to the signed-in owner of this line
+      password: subscription.iptv_password || null,
       expiryDate: expiryDate 
         ? expiryDate.toLocaleDateString('en-US', {
             year: 'numeric',

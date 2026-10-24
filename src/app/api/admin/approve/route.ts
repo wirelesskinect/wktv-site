@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAdminFromRequest } from '@/lib/auth'
 import { adminSupabase } from '@/lib/supabase-server'
 import { getPlan, type Plan } from '@/lib/plans'
+import { randomInt } from 'crypto'
 import {
   nxtConfigured,
   packageIdForPlan,
@@ -95,17 +96,26 @@ export async function POST(request: NextRequest) {
         panelLineId = line.id
         mode = 'extended'
       } else {
-        const creds = generateCredentials()
-        const created = await createLine({
-          packageId,
-          trial: isFreeTrial,
-          username: creds.username,
-          password: creds.password,
-          description: `WKTV:${signup.email || signup.user_id}`,
-        })
-        username = created.username
-        password = created.password
-        expiresAt = created.expiresAt
+        // Use the login the customer chose at checkout (older orders get a generated one)
+        const generated = generateCredentials()
+        const wanted = signup.requested_username || generated.username
+        const wantedPassword = signup.requested_password || generated.password
+        const description = `WKTV:${signup.email || signup.user_id}`
+
+        // If that name is already used on the panel, add 2 digits (up to 3 tries)
+        let created = null as Awaited<ReturnType<typeof createLine>> | null
+        for (let attempt = 0; attempt < 4 && !created; attempt++) {
+          const tryName = attempt === 0 ? wanted : `${wanted.slice(0, 14)}${randomInt(10, 100)}`
+          try {
+            created = await createLine({ packageId, trial: isFreeTrial, username: tryName, password: wantedPassword, description })
+          } catch (err) {
+            const taken = err instanceof NxtError && /taken|exist|already/i.test(err.message)
+            if (!taken || attempt === 3) throw err
+          }
+        }
+        username = created!.username
+        password = created!.password
+        expiresAt = created!.expiresAt
         mode = 'created'
       }
     } else {
@@ -117,8 +127,8 @@ export async function POST(request: NextRequest) {
         expiresAt = manualExpiry(plan, current && current > new Date() ? current : new Date())
       } else {
         const creds = generateCredentials()
-        username = creds.username
-        password = creds.password
+        username = signup.requested_username || creds.username
+        password = signup.requested_password || creds.password
         expiresAt = manualExpiry(plan, new Date())
       }
       mode = 'manual'
@@ -137,7 +147,7 @@ export async function POST(request: NextRequest) {
           connections: plan.connections,
           status: 'active',
           expires_at: expiresAt ? expiresAt.toISOString() : null,
-          payment_method: isFreeTrial ? 'trial' : 'cashapp',
+          payment_method: isFreeTrial ? 'trial' : (signup.payment_method || 'cashapp'),
           payment_reference: signup.cashapp_name,
           updated_at: new Date().toISOString(),
         },
@@ -161,7 +171,9 @@ export async function POST(request: NextRequest) {
       .eq('user_id', signup.user_id)
       .eq('status', 'pending')
 
+    const renamed = mode === 'created' && signup.requested_username && signup.requested_username !== username
     const message =
+      renamed ? `New line created on the IPTV panel. "${signup.requested_username}" was already taken there, so it was created as "${username}" (shown on the customer's account page).` :
       mode === 'created' ? 'New line created on the IPTV panel.' :
       mode === 'extended' ? 'Existing line extended on the IPTV panel.' :
       'Approved in manual mode (panel not connected): create or extend this line in your IPTV panel.'

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getSession, getSessionCookieName } from '@/lib/auth'
-import { getPlan } from '@/lib/plans'
+import { getPlan, paymentNoteCode, PAYMENT_METHODS, PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/plans'
+import { normalizeUsername, usernameError, passwordError } from '@/lib/iptv-login'
+import { isTrialDevice } from '@/lib/devices'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,13 +62,16 @@ export async function POST(request: NextRequest) {
     }
 
     const isFreeTrial = plan.price === 0
+    // How they paid (Cash App, Zelle or Venmo) and the name/handle they paid from
+    const method: PaymentMethod = PAYMENT_METHODS.includes(body?.paymentMethod) ? body.paymentMethod : 'cashapp'
+    const methodLabel = PAYMENT_METHOD_LABELS[method]
     const cashAppName = typeof body?.cashAppName === 'string' ? body.cashAppName.trim() : ''
     if (!isFreeTrial) {
       if (!cashAppName) {
-        return NextResponse.json({ error: 'Please enter your Cash App name or $Cashtag.' }, { status: 400 })
+        return NextResponse.json({ error: `Please enter the name or ${method === 'zelle' ? 'phone/email' : 'handle'} you paid from on ${methodLabel}.` }, { status: 400 })
       }
       if (cashAppName.length > 60) {
-        return NextResponse.json({ error: 'Cash App name is too long.' }, { status: 400 })
+        return NextResponse.json({ error: 'That name is too long.' }, { status: 400 })
       }
     }
 
@@ -95,35 +100,70 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'You already have a request for this plan waiting for confirmation. We’ll activate it shortly.' }, { status: 409 })
     }
 
-    // Renewal = the customer already has a subscription on file
+    // Renewal = the customer already has a line on file
     const { data: existingSub } = await adminSupabase
       .from('user_subscriptions')
-      .select('id')
+      .select('id, iptv_username')
       .eq('user_id', user.id)
       .limit(1)
     const isRenewal = !!(existingSub && existingSub.length)
+    const hasLine = !!(existingSub && existingSub[0]?.iptv_username)
+
+    // New customers choose the username and password they'll type into the TV app
+    let requestedUsername: string | null = null
+    let requestedPassword: string | null = null
+    if (!hasLine) {
+      const uname = normalizeUsername(body?.iptvUsername)
+      const pword = typeof body?.iptvPassword === 'string' ? body.iptvPassword.trim() : ''
+      const problem = usernameError(uname) || passwordError(pword, uname)
+      if (problem) {
+        return NextResponse.json({ error: problem, field: 'iptv' }, { status: 400 })
+      }
+      const [{ data: takenLine }, { data: takenRequest }] = await Promise.all([
+        adminSupabase.from('user_subscriptions').select('id').eq('iptv_username', uname).limit(1),
+        adminSupabase
+          .from('pending_signups')
+          .select('id')
+          .eq('requested_username', uname)
+          .in('status', ['pending', 'processing'])
+          .neq('user_id', user.id)
+          .limit(1),
+      ])
+      if ((takenLine && takenLine.length) || (takenRequest && takenRequest.length)) {
+        return NextResponse.json({ error: 'That username is already taken. Please choose another.', field: 'iptv' }, { status: 409 })
+      }
+      requestedUsername = uname
+      requestedPassword = pword
+    }
 
     const amountCents = plan.price * 100
     const userName = user.name || user.email?.split('@')[0] || 'Unknown'
     const userPhone = user.phone || null
     const userEmail = user.email || ''
 
-    const { data: signup, error: signupError } = await adminSupabase
+    const baseRow = {
+      user_id: user.id,
+      name: userName,
+      email: userEmail,
+      phone: userPhone,
+      plan_id: plan.id,
+      plan_name: plan.name,
+      amount_cents: amountCents,
+      payment_method: isFreeTrial ? 'trial' : method,
+      cashapp_name: isFreeTrial ? null : cashAppName,
+      notes: isTrialDevice(body?.device) ? `Device: ${body.device}` : null,
+      status: 'pending',
+    }
+    let { data: signup, error: signupError } = await adminSupabase
       .from('pending_signups')
-      .insert({
-        user_id: user.id,
-        name: userName,
-        email: userEmail,
-        phone: userPhone,
-        plan_id: plan.id,
-        plan_name: plan.name,
-        amount_cents: amountCents,
-        payment_method: isFreeTrial ? 'trial' : 'cashapp',
-        cashapp_name: isFreeTrial ? null : cashAppName,
-        status: 'pending',
-      })
+      .insert({ ...baseRow, requested_username: requestedUsername, requested_password: requestedPassword })
       .select()
       .single()
+    // Database not updated yet (missing login columns): save the order anyway
+    if (signupError && /requested_(username|password)/.test(signupError.message || '')) {
+      console.error('pending_signups is missing the requested_username/password columns; run the 2026-10-25 migration')
+      ;({ data: signup, error: signupError } = await adminSupabase.from('pending_signups').insert(baseRow).select().single())
+    }
 
     if (signupError) {
       console.error('Failed to create pending signup:', signupError)
@@ -136,8 +176,8 @@ export async function POST(request: NextRequest) {
         .insert({
           user_id: user.id,
           amount_cents: amountCents,
-          payment_method: 'cashapp',
-          payment_reference: cashAppName,
+          payment_method: method,
+          payment_reference: `${cashAppName} (note ${paymentNoteCode(plan)})`,
           status: 'pending',
         })
       if (paymentError) {
@@ -148,9 +188,11 @@ export async function POST(request: NextRequest) {
     await sendPushover(
       isFreeTrial
         ? '🎁 WKTV Free Trial Request'
-        : `💰 WKTV ${isRenewal ? 'Renewal' : 'Payment'} - $${plan.price}`,
+        : `💰 WKTV ${isRenewal ? 'Renewal' : 'Payment'} - $${plan.price} via ${methodLabel}`,
       `Plan: ${plan.name}\nCustomer: ${userName}\nEmail: ${userEmail}` +
-        (isFreeTrial ? '' : `\nCash App: ${cashAppName}`) +
+        (isFreeTrial ? '' : `\n${methodLabel}: ${cashAppName}\nNote code: ${paymentNoteCode(plan)}`) +
+        (requestedUsername ? `\nWants username: ${requestedUsername}` : '') +
+        (isTrialDevice(body?.device) ? `\nDevice: ${body.device}` : '') +
         (userPhone ? `\nPhone: ${userPhone}` : '')
     )
 
