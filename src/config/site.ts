@@ -38,7 +38,7 @@ export const siteConfig = {
     ],
     lifetime: [
       { id: 'lifetime-1', name: '1 Connection', price: 600, connections: 1, duration: 'lifetime' },
-      { id: 'lifetime-5', name: '5 Connections', price: 800, connections: 5, duration: 'lifetime' },
+      { id: 'lifetime-5', name: '5 Connections', price: 850, connections: 5, duration: 'lifetime' },
     ],
   },
   
