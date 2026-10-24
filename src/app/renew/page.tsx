@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { siteConfig } from '@/config/site'
+import { PLANS, RENEWABLE_PLANS, type Plan } from '@/lib/plans'
 
 interface Subscription {
   id: string
@@ -14,29 +15,12 @@ interface Subscription {
   expires_at: string | null
 }
 
-interface Plan {
-  id: string
-  name: string
-  price: number
-  connections: number
-  duration: string
-  badge?: string
-}
-
-const PLANS: Plan[] = [
-  { id: 'monthly-1', name: 'Monthly', price: 30, connections: 1, duration: '1 month' },
-  { id: 'annual-1', name: '1 Connection Annual', price: 175, connections: 1, duration: '1 year' },
-  { id: 'annual-2', name: '2 Connections Annual', price: 225, connections: 2, duration: '1 year' },
-  { id: 'annual-3', name: '3 Connections Annual', price: 250, connections: 3, duration: '1 year' },
-  { id: 'annual-4', name: '4 Connections Annual', price: 275, connections: 4, duration: '1 year' },
-  { id: 'annual-5', name: '5 Connections Annual', price: 300, connections: 5, duration: '1 year', badge: 'Best Value' },
-]
 
 export default function RenewPage() {
   const router = useRouter()
   const [subscription, setSubscription] = useState<Subscription | null>(null)
   const [loading, setLoading] = useState(true)
-  const [selectedPlan, setSelectedPlan] = useState<Plan>(PLANS[1])
+  const [selectedPlan, setSelectedPlan] = useState<Plan>(PLANS['annual-1'])
   const [cashAppName, setCashAppName] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -88,20 +72,16 @@ export default function RenewPage() {
       const res = await fetch('/api/payment/cashapp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        // Only the plan and Cash App name are sent; the server sets the price
         body: JSON.stringify({
           planId: selectedPlan.id,
-          planName: selectedPlan.name,
-          amountCents: selectedPlan.price * 100,
-          connections: selectedPlan.connections,
-          duration: selectedPlan.duration,
           cashAppName: cashAppName.trim(),
-          isRenewal: !!subscription?.iptv_username,
         }),
       })
 
       const data = await res.json()
-      if (data.error) {
-        setError(data.error)
+      if (!res.ok || data.error) {
+        setError(data.error || 'Something went wrong. Please try again.')
       } else {
         setSuccess(true)
       }
@@ -157,7 +137,7 @@ export default function RenewPage() {
       <div className="max-w-lg mx-auto px-6 py-12">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold mb-2">
-            {subscription?.iptv_username ? 'RENEW SUBSCRIPTION' : 'SUBSCRIBE TO WKTV'}
+            {subscription?.iptv_username ? 'RENEW OR UPGRADE' : 'CHOOSE A PLAN'}
           </h1>
           <p className="text-gray-400">Pay with Cash App</p>
         </div>
@@ -183,11 +163,24 @@ export default function RenewPage() {
           </div>
         )}
 
+        {!subscription?.iptv_username && (
+          <div className="border border-gray-800 rounded p-4 mb-6 flex flex-wrap gap-3 items-center justify-between">
+            <div>
+              <p className="font-semibold">New to WKTV?</p>
+              <p className="text-gray-400 text-sm">Try it free for 24 hours, or $20 for a full month.</p>
+            </div>
+            <div className="flex gap-2">
+              <Link href="/pay?plan=trial-free" className="btn-secondary text-sm px-4 py-2">Free trial</Link>
+              <Link href="/pay?plan=trial-1mo" className="btn-secondary text-sm px-4 py-2">$20 month</Link>
+            </div>
+          </div>
+        )}
+
         {/* Plan Selection */}
         <div className="mb-6">
           <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wide mb-3">Select Plan</h3>
           <div className="space-y-3">
-            {PLANS.map((plan) => (
+            {RENEWABLE_PLANS.map((plan) => (
               <button
                 key={plan.id}
                 onClick={() => setSelectedPlan(plan)}
