@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { siteConfig } from '@/config/site'
-import { PLANS, RENEWABLE_PLANS, type Plan } from '@/lib/plans'
+import { PLANS, RENEWABLE_PLANS, connectionUpgrades, type Plan } from '@/lib/plans'
+import ConnectionWarning from '@/components/ConnectionWarning'
 
 interface Subscription {
   id: string
@@ -20,7 +21,8 @@ export default function RenewPage() {
   const router = useRouter()
   const [subscription, setSubscription] = useState<Subscription | null>(null)
   const [loading, setLoading] = useState(true)
-  const [selectedPlan, setSelectedPlan] = useState<Plan>(PLANS['annual-1'])
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
+  const [warningPlan, setWarningPlan] = useState<Plan | null>(null)
   const [cashAppName, setCashAppName] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -50,6 +52,8 @@ export default function RenewPage() {
       const data = await res.json()
       if (data.subscription) {
         setSubscription(data.subscription)
+        // Existing customers start with their usual annual plan selected
+        setSelectedPlan(PLANS['annual-1'])
       }
     } catch (err) {
       console.error('Failed to fetch subscription:', err)
@@ -60,6 +64,10 @@ export default function RenewPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!selectedPlan) {
+      setError('Please choose a plan')
+      return
+    }
     if (!cashAppName.trim()) {
       setError('Please enter your Cash App name')
       return
@@ -183,9 +191,16 @@ export default function RenewPage() {
             {RENEWABLE_PLANS.map((plan) => (
               <button
                 key={plan.id}
-                onClick={() => setSelectedPlan(plan)}
+                onClick={() => {
+                  // First-time customers: last chance to add connections
+                  if (!subscription?.iptv_username && connectionUpgrades(plan).length > 0) {
+                    setWarningPlan(plan)
+                  } else {
+                    setSelectedPlan(plan)
+                  }
+                }}
                 className={`w-full p-4 rounded text-left transition-all ${
-                  selectedPlan.id === plan.id
+                  selectedPlan?.id === plan.id
                     ? 'bg-red-600 border-2 border-red-500'
                     : 'bg-gray-900 border border-gray-800 hover:border-gray-700'
                 }`}
@@ -207,7 +222,12 @@ export default function RenewPage() {
           </div>
         </div>
 
+        {!selectedPlan && (
+          <p className="text-center text-gray-400 mb-6">Tap a plan above to see payment instructions.</p>
+        )}
+
         {/* Cash App Payment */}
+        {selectedPlan && (
         <div className="bg-gray-900 border border-gray-800 rounded p-6">
           <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wide mb-4">Pay with Cash App</h3>
 
@@ -252,11 +272,24 @@ export default function RenewPage() {
             </button>
           </form>
         </div>
+        )}
 
         <p className="text-center text-gray-600 text-sm mt-6">
           Need help? <Link href="/support" className="text-red-500 hover:underline">Contact Support</Link>
         </p>
       </div>
+
+      {warningPlan && (
+        <ConnectionWarning
+          plan={warningPlan}
+          open={!!warningPlan}
+          onClose={() => setWarningPlan(null)}
+          onChoose={(chosen) => {
+            setSelectedPlan(chosen)
+            setWarningPlan(null)
+          }}
+        />
+      )}
     </div>
   )
 }
