@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { getAdminFromRequest } from '@/lib/auth'
 export const dynamic = 'force-dynamic'
 import { createClient } from '@supabase/supabase-js'
 
@@ -11,8 +12,12 @@ const adminSupabase = createClient(
   }
 )
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const admin = await getAdminFromRequest(request)
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
     const { signupId, reason } = await request.json()
 
     if (!signupId) {

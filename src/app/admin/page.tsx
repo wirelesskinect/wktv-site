@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 
 interface PendingSignup {
   id: string
@@ -107,39 +106,32 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Header */}
-      <header className="border-b border-gray-800 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/">
-              <Image src="/wktv-logo.jpg" alt="WKTV" width={40} height={40} className="rounded" />
-            </Link>
-            <h1 className="text-xl font-bold">Admin Dashboard</h1>
-          </div>
-          <Link href="/" className="text-gray-400 hover:text-white text-sm">
-            ← Back to Site
-          </Link>
+    <div className="portal-main animate-in">
+      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <span className="eyebrow">Admin</span>
+          <h1 className="page-title">Orders &amp; activations</h1>
+          <p className="page-sub">Confirm the Cash App payment before approving. Free trials have no payment.</p>
         </div>
-      </header>
-
-      <div className="max-w-7xl mx-auto px-6 py-8">
+        <button onClick={() => fetchPendingSignups()} className="btn-secondary">↻ Refresh</button>
+      </div>
+      <div>
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-3 gap-3 sm:gap-6 mb-8">
           <div className="card text-center">
-            <p className="text-4xl font-bold text-yellow-500">
+            <p className="text-4xl font-extrabold" style={{ color: '#fde68a', fontFamily: 'var(--font-display)' }}>
               {pendingSignups.filter(s => s.status === 'pending').length}
             </p>
             <p className="text-gray-400 text-sm mt-1">Pending</p>
           </div>
           <div className="card text-center">
-            <p className="text-4xl font-bold text-green-500">
+            <p className="text-4xl font-extrabold" style={{ color: '#86efac', fontFamily: 'var(--font-display)' }}>
               {pendingSignups.filter(s => s.status === 'approved').length}
             </p>
-            <p className="text-gray-400 text-sm mt-1">Approved Today</p>
+            <p className="text-gray-400 text-sm mt-1">Approved</p>
           </div>
           <div className="card text-center">
-            <p className="text-4xl font-bold text-gray-500">
+            <p className="text-4xl font-extrabold" style={{ fontFamily: 'var(--font-display)' }}>
               {pendingSignups.length}
             </p>
             <p className="text-gray-400 text-sm mt-1">Total</p>
@@ -150,33 +142,27 @@ export default function AdminPage() {
         <div className="flex gap-2 mb-6">
           <button
             onClick={() => setFilter('pending')}
-            className={`px-4 py-2 rounded ${filter === 'pending' ? 'bg-red-600' : 'bg-gray-800'}`}
+            className={`tile ${filter === 'pending' ? 'is-active' : ''}`} style={{ padding: '8px 16px' }}
           >
             Pending
           </button>
           <button
             onClick={() => setFilter('approved')}
-            className={`px-4 py-2 rounded ${filter === 'approved' ? 'bg-red-600' : 'bg-gray-800'}`}
+            className={`tile ${filter === 'approved' ? 'is-active' : ''}`} style={{ padding: '8px 16px' }}
           >
             Approved
           </button>
           <button
             onClick={() => setFilter('all')}
-            className={`px-4 py-2 rounded ${filter === 'all' ? 'bg-red-600' : 'bg-gray-800'}`}
+            className={`tile ${filter === 'all' ? 'is-active' : ''}`} style={{ padding: '8px 16px' }}
           >
             All
-          </button>
-          <button
-            onClick={() => fetchPendingSignups()}
-            className="px-4 py-2 rounded bg-gray-800 ml-auto"
-          >
-            🔄 Refresh
           </button>
         </div>
 
         {/* Error */}
         {error && (
-          <div className="p-4 bg-red-900/30 border border-red-700 text-red-400 mb-6 rounded">
+          <div className="alert alert-error mb-6">
             {error}
           </div>
         )}
@@ -190,7 +176,7 @@ export default function AdminPage() {
           </div>
         ) : (
           /* Signups Table */
-          <div className="overflow-x-auto">
+          <div className="card overflow-x-auto" style={{ padding: 20 }}>
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-800 text-left text-gray-400 text-sm">
@@ -227,7 +213,7 @@ export default function AdminPage() {
                     </td>
                     <td className="py-4">
                       <span className="bg-green-900/30 text-green-400 px-2 py-1 rounded text-sm">
-                        {signup.cashapp_name}
+                        {signup.cashapp_name || (signup.amount_cents === 0 ? 'Free trial' : '—')}
                       </span>
                     </td>
                     <td className="py-4">

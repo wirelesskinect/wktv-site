@@ -1,183 +1,120 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Logo } from '@/components/Logo'
-import { siteConfig, VideoCategory } from '@/config/site'
 
-const categories: { id: VideoCategory; label: string; icon: string }[] = [
-  { id: 'setup', label: 'Setup Guides', icon: '📱' },
-  { id: 'troubleshooting', label: 'Troubleshooting', icon: '🔧' },
-  { id: 'account', label: 'Account Help', icon: '👤' },
+const FB_GROUP = 'https://www.facebook.com/groups/wktvsupport'
+
+const TOPICS = [
+  { id: 'technical', label: 'Setup or streaming problem' },
+  { id: 'billing', label: 'Payment or plan question' },
+  { id: 'account', label: 'Website login or password reset' },
+  { id: 'account_link', label: 'Link my existing IPTV account' },
+  { id: 'other', label: 'Something else' },
 ]
 
 export default function SupportPage() {
-  const [activeCategory, setActiveCategory] = useState<VideoCategory | 'all'>('all')
-  const [selectedVideo, setSelectedVideo] = useState<string | null>(null)
+  const [form, setForm] = useState({ name: '', email: '', subject: 'technical', message: '' })
+  const [sending, setSending] = useState(false)
+  const [sent, setSent] = useState(false)
+  const [error, setError] = useState('')
 
-  const filteredVideos = activeCategory === 'all' 
-    ? siteConfig.troubleshootingVideos 
-    : siteConfig.troubleshootingVideos.filter(v => v.category === activeCategory)
+  // Pre-fill from the logged-in account and from ?topic= links
+  useEffect(() => {
+    const topic = new URLSearchParams(window.location.search).get('topic')
+    if (topic && TOPICS.some((t) => t.id === topic)) setForm((f) => ({ ...f, subject: topic }))
+    fetch('/api/auth/me').then((r) => r.json()).then((d) => {
+      if (d.user) setForm((f) => ({ ...f, name: f.name || d.user.name || '', email: f.email || d.user.email || '' }))
+    }).catch(() => {})
+  }, [])
 
-  const currentVideo = selectedVideo 
-    ? siteConfig.troubleshootingVideos.find(v => v.id === selectedVideo)
-    : null
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+    setSending(true)
+    try {
+      const res = await fetch('/api/support', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) setError(data.error || 'Could not send your message. Please try again.')
+      else setSent(true)
+    } catch {
+      setError('Could not send your message. Please try again.')
+    } finally {
+      setSending(false)
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Header */}
-      <header className="border-b border-gray-200 px-6 py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <Link href="/dashboard" className="text-gray-500 hover:text-black text-sm font-medium transition-colors">
-            ← Back to Dashboard
-          </Link>
-          <Link href="/" className="flex items-center gap-2">
-            <Logo className="w-6 h-6" />
-            <span className="font-bold text-sm tracking-tight">OMEGA TV</span>
-          </Link>
-        </div>
-      </header>
-
-      <div className="max-w-6xl mx-auto px-6 py-12">
-        {/* Page Title */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold tracking-tight mb-4">HELP & SUPPORT</h1>
-          <p className="text-gray-500 text-lg">
-            Watch our video guides to get started or troubleshoot issues
-          </p>
-        </div>
-
-        {/* Video Player Modal */}
-        {currentVideo && (
-          <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setSelectedVideo(null)}>
-            <div className="bg-white w-full max-w-4xl" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between p-4 border-b border-gray-200">
-                <h3 className="font-bold">{currentVideo.title}</h3>
-                <button 
-                  onClick={() => setSelectedVideo(null)}
-                  className="text-gray-500 hover:text-black text-2xl"
-                >
-                  ×
-                </button>
-              </div>
-              <div className="aspect-video">
-                <iframe
-                  src={`https://www.youtube.com/embed/${currentVideo.youtubeId}?autoplay=1`}
-                  title={currentVideo.title}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                  className="w-full h-full"
-                />
-              </div>
-              <div className="p-4 border-t border-gray-200">
-                <p className="text-gray-500">{currentVideo.description}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Category Filter */}
-        <div className="flex flex-wrap justify-center gap-3 mb-10">
-          <button
-            onClick={() => setActiveCategory('all')}
-            className={`px-6 py-3 font-medium transition-colors ${
-              activeCategory === 'all'
-                ? 'bg-black text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            All Videos
-          </button>
-          {categories.map(cat => (
-            <button
-              key={cat.id}
-              onClick={() => setActiveCategory(cat.id)}
-              className={`px-6 py-3 font-medium transition-colors ${
-                activeCategory === cat.id
-                  ? 'bg-black text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              {cat.icon} {cat.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Video Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredVideos.map(video => (
-            <div 
-              key={video.id}
-              onClick={() => setSelectedVideo(video.id)}
-              className="border border-gray-200 hover:border-black cursor-pointer transition-colors group"
-            >
-              {/* Thumbnail */}
-              <div className="aspect-video bg-gray-100 relative overflow-hidden">
-                <img
-                  src={`https://img.youtube.com/vi/${video.youtubeId}/maxresdefault.jpg`}
-                  alt={video.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                  onError={(e) => {
-                    // Fallback to medium quality if maxres not available
-                    (e.target as HTMLImageElement).src = `https://img.youtube.com/vi/${video.youtubeId}/mqdefault.jpg`
-                  }}
-                />
-                <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  <div className="w-16 h-16 bg-white/90 rounded-full flex items-center justify-center">
-                    <span className="text-2xl ml-1">▶</span>
-                  </div>
-                </div>
-                <span className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-1 uppercase tracking-wide">
-                  {categories.find(c => c.id === video.category)?.label}
-                </span>
-              </div>
-              {/* Info */}
-              <div className="p-4">
-                <h3 className="font-bold mb-2 group-hover:text-black transition-colors">{video.title}</h3>
-                <p className="text-gray-500 text-sm">{video.description}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Contact Section */}
-        <div className="mt-16 text-center border-t border-gray-200 pt-12">
-          <h2 className="text-2xl font-bold mb-4">Still Need Help?</h2>
-          <p className="text-gray-500 mb-6">
-            Can't find what you're looking for? Contact our support team directly.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <a
-              href={`mailto:${siteConfig.supportEmail}`}
-              className="btn-primary"
-            >
-              📧 Email Support
-            </a>
-            <Link href="/dashboard" className="btn-secondary">
-              Go to Dashboard
-            </Link>
-          </div>
-          <p className="text-gray-400 text-sm mt-6">
-            Email: {siteConfig.supportEmail}
-          </p>
-        </div>
+    <div className="portal-main animate-in" style={{ maxWidth: 1000 }}>
+      <div className="mb-8">
+        <span className="eyebrow">WKTV support</span>
+        <h1 className="page-title">How can we help?</h1>
+        <p className="page-sub">Most answers are one click away. Still stuck? Send us a message.</p>
       </div>
 
-      {/* Footer */}
-      <footer className="py-8 border-t border-gray-200 mt-12">
-        <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-gray-500">
-            <Logo className="w-5 h-5" />
-            <span className="text-sm font-medium">{siteConfig.siteName}</span>
-          </div>
-          <div className="flex gap-6 text-sm text-gray-500">
-            <Link href="/login" className="hover:text-black transition-colors">Login</Link>
-            <Link href="/signup" className="hover:text-black transition-colors">Sign Up</Link>
-            <Link href="/support" className="hover:text-black transition-colors">Support</Link>
-          </div>
-          <p className="text-sm text-gray-400">© 2026 {siteConfig.siteName}</p>
+      <div className="grid gap-6 lg:grid-cols-[1fr_1.4fr]">
+        <div className="grid gap-3 content-start">
+          <a href="/support.html#connect" className="tile">
+            <p className="font-bold">📺 How to connect</p>
+            <p className="text-sm text-muted">Downloader codes and steps for every device.</p>
+          </a>
+          <a href="/troubleshooting.html#setup-help" className="tile">
+            <p className="font-bold">🧰 Trouble setting up</p>
+            <p className="text-sm text-muted">Internet provider blocks, modems, hotspot setup.</p>
+          </a>
+          <a href="/troubleshooting.html" className="tile">
+            <p className="font-bold">🛠 Quick fixes</p>
+            <p className="text-sm text-muted">Cloud error 451, no channels, TV guide, buffering.</p>
+          </a>
+          <a href={FB_GROUP} target="_blank" rel="noopener noreferrer" className="tile">
+            <p className="font-bold">👥 Facebook support group ↗</p>
+            <p className="text-sm text-muted">Fast answers from WKTV and the community.</p>
+          </a>
         </div>
-      </footer>
+
+        <div className="card">
+          {sent ? (
+            <div className="text-center py-6">
+              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full text-3xl" style={{ background: 'rgba(34,197,94,.14)', border: '1px solid rgba(34,197,94,.4)' }}>✓</div>
+              <h2 className="text-2xl mb-2">Message sent</h2>
+              <p className="text-muted mb-6">Thanks, {form.name.split(' ')[0] || 'there'}. We&apos;ll reply to {form.email} as soon as we can.</p>
+              <Link href="/dashboard" className="btn-secondary">Back to my account</Link>
+            </div>
+          ) : (
+            <form onSubmit={submit} className="space-y-5">
+              <h2 className="text-xl">Send us a message</h2>
+              {error && <div className="alert alert-error">{error}</div>}
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="s-name" className="field-label">Name</label>
+                  <input id="s-name" type="text" value={form.name} maxLength={100} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Your name" required />
+                </div>
+                <div>
+                  <label htmlFor="s-email" className="field-label">Email</label>
+                  <input id="s-email" type="email" value={form.email} maxLength={200} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="you@example.com" required />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="s-topic" className="field-label">What do you need help with?</label>
+                <select id="s-topic" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })}>
+                  {TOPICS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="s-msg" className="field-label">Message</label>
+                <textarea id="s-msg" rows={6} value={form.message} maxLength={2000} onChange={(e) => setForm({ ...form, message: e.target.value })}
+                  placeholder="Tell us your device, any error message, and what you've tried." required />
+                <p className="field-hint">Never include passwords in your message.</p>
+              </div>
+              <button type="submit" disabled={sending} className="btn-primary w-full">{sending ? 'Sending…' : 'Send message →'}</button>
+            </form>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

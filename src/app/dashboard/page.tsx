@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Logo } from '@/components/Logo'
 
 interface User {
   id: string
@@ -17,220 +16,154 @@ interface SubscriptionData {
   status: 'active' | 'expired' | 'pending' | 'unlinked'
   username?: string
   expiryDate?: string
-  daysRemaining?: number
+  daysRemaining?: number | null
   planName?: string
+  pendingRequest?: { planName: string; amount: number; method: string; requestedAt: string } | null
 }
+
+const FB_GROUP = 'https://www.facebook.com/groups/wktvsupport'
 
 export default function DashboardPage() {
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
-    // Fetch current user from custom auth
-    fetch('/api/auth/me')
-      .then(res => res.json())
-      .then(data => {
-        if (data.user) {
-          setUser(data.user)
-          fetchSubscription()
-        } else {
-          // Not logged in, middleware should have caught this but just in case
+    (async () => {
+      try {
+        const me = await (await fetch('/api/auth/me', { cache: 'no-store' })).json()
+        if (!me.user) {
           router.push('/login')
+          return
         }
-      })
-      .catch(() => {
+        setUser(me.user)
+        try {
+          const sub = await (await fetch('/api/subscription', { cache: 'no-store' })).json()
+          setSubscription(sub?.status ? sub : { status: 'unlinked' })
+        } catch {
+          setSubscription({ status: 'unlinked' })
+        }
+      } catch {
         router.push('/login')
-      })
+        return
+      }
+      setLoading(false)
+    })()
   }, [router])
 
-  const fetchSubscription = async () => {
-    try {
-      const res = await fetch('/api/subscription')
-      const data = await res.json()
-      setSubscription(data)
-    } catch (err) {
-      setSubscription({ status: 'unlinked' })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    router.push('/')
-  }
-
   if (loading) {
-    return (
-      <div className="min-h-screen bg-white">
-        {/* Header */}
-        <header className="border-b border-gray-200">
-          <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-3">
-              <Logo className="w-8 h-8" />
-              <span className="text-lg font-bold tracking-tight">WKTV</span>
-            </Link>
-            <div className="flex items-center gap-6">
-              <div className="h-4 w-20 bg-gray-200 animate-pulse rounded"></div>
-              <div className="h-4 w-12 bg-gray-200 animate-pulse rounded"></div>
-            </div>
-          </div>
-        </header>
-
-        {/* Main */}
-        <main className="max-w-3xl mx-auto px-6 py-12">
-          <div className="h-8 w-48 bg-gray-200 animate-pulse rounded mb-8"></div>
-
-          {/* Status Card Skeleton */}
-          <div className="border border-gray-200 p-8 mb-8">
-            <div className="h-16 bg-gray-100 animate-pulse rounded mb-6"></div>
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <div className="h-3 w-16 bg-gray-200 animate-pulse rounded mb-2"></div>
-                <div className="h-6 w-32 bg-gray-200 animate-pulse rounded"></div>
-              </div>
-              <div>
-                <div className="h-3 w-16 bg-gray-200 animate-pulse rounded mb-2"></div>
-                <div className="h-6 w-24 bg-gray-200 animate-pulse rounded"></div>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Links Skeleton */}
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="border border-gray-200 p-6">
-              <div className="h-5 w-24 bg-gray-200 animate-pulse rounded mb-2"></div>
-              <div className="h-4 w-full bg-gray-100 animate-pulse rounded"></div>
-            </div>
-            <div className="border border-gray-200 p-6">
-              <div className="h-5 w-24 bg-gray-200 animate-pulse rounded mb-2"></div>
-              <div className="h-4 w-full bg-gray-100 animate-pulse rounded"></div>
-            </div>
-          </div>
-        </main>
-      </div>
-    )
+    return <div className="flex items-center justify-center py-32"><div className="spinner" /></div>
   }
 
-  const userName = user?.name || user?.email?.split('@')[0] || 'Customer'
+  const firstName = (user?.name || user?.email?.split('@')[0] || 'there').split(' ')[0]
+  const status = subscription?.status || 'unlinked'
+  const hasPlan = status === 'active' || status === 'expired'
+  const lowDays = typeof subscription?.daysRemaining === 'number' && subscription.daysRemaining < 7
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Header */}
-      <header className="border-b border-gray-200">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3">
-            <Logo className="w-8 h-8" />
-            <span className="text-lg font-bold tracking-tight">WKTV</span>
-          </Link>
-          <div className="flex items-center gap-6">
-            <span className="text-gray-500 text-sm">Hi, {userName}</span>
-            <button 
-              onClick={handleLogout} 
-              className="text-gray-400 hover:text-black text-sm font-medium transition-colors"
-            >
-              Logout
-            </button>
-          </div>
-        </div>
-      </header>
+    <div className="portal-main animate-in" style={{ maxWidth: 980 }}>
+      <div className="mb-8">
+        <span className="eyebrow">My account</span>
+        <h1 className="page-title">Hi, {firstName}</h1>
+        <p className="page-sub">{user?.email}</p>
+      </div>
 
-      {/* Main */}
-      <main className="max-w-3xl mx-auto px-6 py-12">
-        <h1 className="text-3xl font-bold mb-8 tracking-tight">MY SUBSCRIPTION</h1>
-
-        {/* Status Card */}
-        <div className="border border-gray-200 p-8 mb-8">
-          {subscription?.status === 'unlinked' || subscription?.status === 'pending' ? (
-            <div className="text-center py-8">
-              <div className="text-5xl mb-4">📺</div>
-              <h2 className="text-xl font-bold mb-2">
-                {subscription?.status === 'pending' ? 'ACCOUNT PENDING' : 'GET STARTED'}
+      <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
+        {/* Plan status */}
+        <div className={`card ${status === 'active' ? '' : 'card-red'}`}>
+          {!hasPlan ? (
+            <div>
+              <span className={`pill ${status === 'pending' ? 'pill-yellow' : 'pill-gray'}`}>
+                {status === 'pending' ? '● Awaiting confirmation' : '● No plan yet'}
+              </span>
+              <h2 className="text-2xl mt-4 mb-2">
+                {status === 'pending' ? 'We’re setting things up' : 'Welcome to WKTV'}
               </h2>
-              <p className="text-gray-500 mb-6">
-                {subscription?.status === 'pending' 
-                  ? 'Your account is being set up. Subscribe below if you haven\'t paid yet.'
-                  : 'Subscribe to WKTV to start streaming.'}
+              <p className="text-muted mb-6">
+                {status === 'pending'
+                  ? subscription?.pendingRequest
+                    ? `We received your request for ${subscription.pendingRequest.planName}${subscription.pendingRequest.amount ? ` ($${subscription.pendingRequest.amount})` : ''}. We’ll activate it shortly. This page will update once it’s active.`
+                    : 'Your account is being set up. We’ll activate it shortly.'
+                  : 'Your account is ready. Pick a plan or start a free trial to begin streaming.'}
               </p>
-              <Link href="/renew" className="btn-primary inline-block">
-                Subscribe Now
-              </Link>
-              <div className="mt-4">
-                <Link href="/support" className="text-gray-400 hover:text-black text-sm transition-colors">
-                  Need help? Contact Support
-                </Link>
-              </div>
-            </div>
-          ) : (
-            <>
-              {/* Status Banner */}
-              <div className={`flex items-center gap-3 p-4 mb-6 ${
-                subscription?.status === 'active' 
-                  ? 'bg-green-50 border border-green-200'
-                  : 'bg-red-50 border border-red-200'
-              }`}>
-                <span className="text-2xl">
-                  {subscription?.status === 'active' ? '✓' : '⚠'}
-                </span>
-                <div>
-                  <p className={`font-semibold ${
-                    subscription?.status === 'active' ? 'text-green-700' : 'text-red-700'
-                  }`}>
-                    {subscription?.status === 'active' ? 'Active Subscription' : 'Subscription Expired'}
-                  </p>
-                  {subscription?.daysRemaining !== undefined && (
-                    <p className="text-sm text-gray-500">
-                      {subscription.daysRemaining > 0 
-                        ? `${subscription.daysRemaining} days remaining`
-                        : 'Expired'}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Details */}
-              <div className="grid md:grid-cols-2 gap-6">
-                <div>
-                  <p className="text-sm text-gray-400 uppercase tracking-wide mb-1">Username</p>
-                  <p className="text-lg font-semibold">{subscription?.username || 'N/A'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-400 uppercase tracking-wide mb-1">Expires</p>
-                  <p className="text-lg font-semibold">{subscription?.expiryDate || 'N/A'}</p>
-                </div>
-              </div>
-
-              {/* Renew Button */}
-              {(subscription?.status !== 'active' || (subscription?.daysRemaining && subscription.daysRemaining < 7)) && (
-                <div className="mt-8 pt-6 border-t border-gray-200">
-                  <Link href="/renew" className="btn-primary inline-block">
-                    Renew Subscription
-                  </Link>
+              {status === 'pending' ? (
+                <a href="/support.html#connect" className="btn-secondary">Get your device ready while you wait</a>
+              ) : (
+                <div className="flex flex-wrap gap-3">
+                  <Link href="/renew" className="btn-primary">Choose a plan →</Link>
+                  <Link href="/pay?plan=trial-free&confirmed=1" className="btn-secondary">Free 24-hour trial</Link>
                 </div>
               )}
-            </>
+            </div>
+          ) : (
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className={`pill ${status === 'active' ? 'pill-green' : 'pill-red'}`}>
+                  {status === 'active' ? '● Active' : '● Expired'}
+                </span>
+                {typeof subscription?.daysRemaining === 'number' && (
+                  <span className="text-sm text-muted">
+                    {subscription.daysRemaining > 0 ? `${subscription.daysRemaining} days remaining` : 'Renew to keep watching'}
+                  </span>
+                )}
+              </div>
+              <h2 className="text-2xl mt-4 mb-6">{subscription?.planName || 'WKTV plan'}</h2>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="tile">
+                  <p className="text-xs uppercase tracking-widest text-muted mb-1">IPTV username</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-lg font-bold break-all">{subscription?.username || '—'}</p>
+                    {subscription?.username && (
+                      <button type="button" className="text-xs link" onClick={() => {
+                        navigator.clipboard?.writeText(subscription.username || '').then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) }).catch(() => {})
+                      }}>{copied ? 'Copied ✓' : 'Copy'}</button>
+                    )}
+                  </div>
+                </div>
+                <div className="tile">
+                  <p className="text-xs uppercase tracking-widest text-muted mb-1">Expires</p>
+                  <p className="text-lg font-bold">{subscription?.expiryDate || '—'}</p>
+                </div>
+              </div>
+
+              <div className="mt-6">
+                {subscription?.pendingRequest ? (
+                  <div className="alert alert-warn">
+                    Your request for <b>{subscription.pendingRequest.planName}</b> is waiting for confirmation. We’ll update your plan shortly.
+                  </div>
+                ) : (
+                  <Link href="/renew" className={status !== 'active' || lowDays ? 'btn-primary' : 'btn-secondary'}>
+                    {status !== 'active' || lowDays ? 'Renew now →' : 'Renew or upgrade'}
+                  </Link>
+                )}
+              </div>
+            </div>
           )}
         </div>
 
-        {/* Quick Links */}
-        <div className="grid md:grid-cols-2 gap-4">
-          <Link href="/support" className="border border-gray-200 p-6 hover:border-gray-400 transition-colors">
-            <h3 className="font-bold mb-2">💬 NEED HELP?</h3>
-            <p className="text-gray-500 text-sm">Chat with support or submit a request.</p>
+        {/* Quick links */}
+        <div className="grid gap-3 content-start">
+          <a href="/support.html#connect" className="tile">
+            <p className="font-bold">📺 How to connect</p>
+            <p className="text-sm text-muted">Setup steps for ONN, Fire TV, Android, and Apple.</p>
+          </a>
+          <a href="/troubleshooting.html" className="tile">
+            <p className="font-bold">🛠 Troubleshooting</p>
+            <p className="text-sm text-muted">Quick fixes for login, channels, and buffering.</p>
+          </a>
+          <Link href="/support" className="tile">
+            <p className="font-bold">💬 Contact support</p>
+            <p className="text-sm text-muted">Send us a message. We’ll get back to you.</p>
           </Link>
-          <a 
-            href="https://www.youtube.com/@OmegaTV-IPTV" 
-            target="_blank" 
-            rel="noopener noreferrer" 
-            className="border border-gray-200 p-6 hover:border-gray-400 transition-colors"
-          >
-            <h3 className="font-bold mb-2">📺 SETUP GUIDE</h3>
-            <p className="text-gray-500 text-sm">Watch video tutorials for your devices.</p>
+          <a href={FB_GROUP} target="_blank" rel="noopener noreferrer" className="tile">
+            <p className="font-bold">👥 Facebook support group ↗</p>
+            <p className="text-sm text-muted">Tips, updates, and help from the community.</p>
           </a>
         </div>
-      </main>
+      </div>
     </div>
   )
 }

@@ -197,3 +197,16 @@ export async function getCurrentUser(): Promise<User | null> {
 export function getSessionCookieName(): string {
   return SESSION_COOKIE_NAME
 }
+
+// Returns the logged-in user only if they are an admin (role = 'admin' in wktv.users).
+// Use at the top of every admin API route.
+export async function getAdminFromRequest(request: { cookies: { get(name: string): { value: string } | undefined } }): Promise<User | null> {
+  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value
+  if (!token) return null
+  const user = await getSession(token)
+  if (!user || user.role !== 'admin') return null
+  // Second check: if ADMIN_EMAILS is configured, the email must be on that list too
+  const allowed = (process.env.ADMIN_EMAILS || '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean)
+  if (allowed.length && !allowed.includes((user.email || '').toLowerCase())) return null
+  return user
+}

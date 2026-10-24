@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getSession, getSessionCookieName } from '@/lib/auth'
+import { getPlan } from '@/lib/plans'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,12 +19,12 @@ const adminSupabase = createClient(
 async function sendPushover(title: string, message: string) {
   const PUSHOVER_APP_TOKEN = process.env.PUSHOVER_APP_TOKEN
   const PUSHOVER_USER_KEY = process.env.WKTV_PUSHOVER_USER_KEY
-  
+
   if (!PUSHOVER_APP_TOKEN || !PUSHOVER_USER_KEY) {
     console.log('Pushover not configured, skipping notification')
     return
   }
-  
+
   try {
     await fetch('https://api.pushover.net/1/messages.json', {
       method: 'POST',
@@ -41,26 +42,72 @@ async function sendPushover(title: string, message: string) {
   }
 }
 
+// Creates a plan request: a Cash App payment for paid plans, or a free-trial request.
+// Only the plan ID and Cash App name are taken from the browser. The price, plan name,
+// and renewal status are all decided here on the server.
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { planId, planName, amountCents, connections, duration, cashAppName, isRenewal } = body
-
-    // Get user from custom auth session
     const token = request.cookies.get(getSessionCookieName())?.value
     const user = token ? await getSession(token) : null
-    
     if (!user) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+      return NextResponse.json({ error: 'Please sign in first.' }, { status: 401 })
     }
 
-    // Get user metadata
+    const body = await request.json().catch(() => ({}))
+    const plan = getPlan(body?.planId)
+    if (!plan) {
+      return NextResponse.json({ error: 'Please choose a valid plan.' }, { status: 400 })
+    }
+
+    const isFreeTrial = plan.price === 0
+    const cashAppName = typeof body?.cashAppName === 'string' ? body.cashAppName.trim() : ''
+    if (!isFreeTrial) {
+      if (!cashAppName) {
+        return NextResponse.json({ error: 'Please enter your Cash App name or $Cashtag.' }, { status: 400 })
+      }
+      if (cashAppName.length > 60) {
+        return NextResponse.json({ error: 'Cash App name is too long.' }, { status: 400 })
+      }
+    }
+
+    // Free trial: one per account
+    if (isFreeTrial) {
+      const { data: priorTrials } = await adminSupabase
+        .from('pending_signups')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('plan_id', 'trial-free')
+        .limit(1)
+      if (priorTrials && priorTrials.length) {
+        return NextResponse.json({ error: 'This account has already requested a free trial. Choose a plan to keep watching.' }, { status: 409 })
+      }
+    }
+
+    // Don't allow stacking the same request while one is still waiting for review
+    const { data: openRequests } = await adminSupabase
+      .from('pending_signups')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('plan_id', plan.id)
+      .eq('status', 'pending')
+      .limit(1)
+    if (openRequests && openRequests.length) {
+      return NextResponse.json({ error: 'You already have a request for this plan waiting for confirmation. We’ll activate it shortly.' }, { status: 409 })
+    }
+
+    // Renewal = the customer already has a subscription on file
+    const { data: existingSub } = await adminSupabase
+      .from('user_subscriptions')
+      .select('id')
+      .eq('user_id', user.id)
+      .limit(1)
+    const isRenewal = !!(existingSub && existingSub.length)
+
+    const amountCents = plan.price * 100
     const userName = user.name || user.email?.split('@')[0] || 'Unknown'
     const userPhone = user.phone || null
     const userEmail = user.email || ''
-    const amount = (amountCents / 100).toFixed(0)
 
-    // Create pending signup record
     const { data: signup, error: signupError } = await adminSupabase
       .from('pending_signups')
       .insert({
@@ -68,11 +115,11 @@ export async function POST(request: NextRequest) {
         name: userName,
         email: userEmail,
         phone: userPhone,
-        plan_id: planId,
-        plan_name: planName,
+        plan_id: plan.id,
+        plan_name: plan.name,
         amount_cents: amountCents,
-        payment_method: 'cashapp',
-        cashapp_name: cashAppName,
+        payment_method: isFreeTrial ? 'trial' : 'cashapp',
+        cashapp_name: isFreeTrial ? null : cashAppName,
         status: 'pending',
       })
       .select()
@@ -80,38 +127,40 @@ export async function POST(request: NextRequest) {
 
     if (signupError) {
       console.error('Failed to create pending signup:', signupError)
-      return NextResponse.json({ error: 'Failed to submit payment' }, { status: 500 })
+      return NextResponse.json({ error: 'Could not submit your request. Please try again.' }, { status: 500 })
     }
 
-    // Also create a payment record
-    const { error: paymentError } = await adminSupabase
-      .from('payments')
-      .insert({
-        user_id: user.id,
-        amount_cents: amountCents,
-        payment_method: 'cashapp',
-        payment_reference: cashAppName,
-        status: 'pending',
-      })
-
-    if (paymentError) {
-      console.error('Failed to create payment record:', paymentError)
+    if (!isFreeTrial) {
+      const { error: paymentError } = await adminSupabase
+        .from('payments')
+        .insert({
+          user_id: user.id,
+          amount_cents: amountCents,
+          payment_method: 'cashapp',
+          payment_reference: cashAppName,
+          status: 'pending',
+        })
+      if (paymentError) {
+        console.error('Failed to create payment record:', paymentError)
+      }
     }
 
-    // Send Pushover notification
     await sendPushover(
-      `💰 WKTV ${isRenewal ? 'Renewal' : 'Payment'} - $${amount}`,
-      `Plan: ${planName}\nCustomer: ${userName}\nEmail: ${userEmail}\nCash App: ${cashAppName}${userPhone ? `\nPhone: ${userPhone}` : ''}`
+      isFreeTrial
+        ? '🎁 WKTV Free Trial Request'
+        : `💰 WKTV ${isRenewal ? 'Renewal' : 'Payment'} - $${plan.price}`,
+      `Plan: ${plan.name}\nCustomer: ${userName}\nEmail: ${userEmail}` +
+        (isFreeTrial ? '' : `\nCash App: ${cashAppName}`) +
+        (userPhone ? `\nPhone: ${userPhone}` : '')
     )
 
     return NextResponse.json({
       success: true,
-      message: 'Payment submitted for verification',
+      message: isFreeTrial ? 'Free trial requested' : 'Payment submitted for verification',
       signupId: signup.id,
     })
-
   } catch (error: any) {
-    console.error('Cash App payment error:', error)
-    return NextResponse.json({ error: error.message || 'Payment failed' }, { status: 500 })
+    console.error('Plan request error:', error)
+    return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 500 })
   }
 }
