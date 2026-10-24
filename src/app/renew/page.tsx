@@ -24,11 +24,12 @@ interface Plan {
 }
 
 const PLANS: Plan[] = [
-  { id: 'monthly-1', name: 'Monthly', price: 25, connections: 1, duration: '1 month' },
-  { id: 'annual-1', name: '1 Connection Annual', price: 150, connections: 1, duration: '1 year' },
-  { id: 'annual-2', name: '2 Connections Annual', price: 200, connections: 2, duration: '1 year' },
-  { id: 'annual-3', name: '3 Connections Annual', price: 230, connections: 3, duration: '1 year' },
-  { id: 'annual-5', name: '5 Connections Annual', price: 280, connections: 5, duration: '1 year', badge: 'Best Value' },
+  { id: 'monthly-1', name: 'Monthly', price: 30, connections: 1, duration: '1 month' },
+  { id: 'annual-1', name: '1 Connection Annual', price: 175, connections: 1, duration: '1 year' },
+  { id: 'annual-2', name: '2 Connections Annual', price: 225, connections: 2, duration: '1 year' },
+  { id: 'annual-3', name: '3 Connections Annual', price: 250, connections: 3, duration: '1 year' },
+  { id: 'annual-4', name: '4 Connections Annual', price: 275, connections: 4, duration: '1 year' },
+  { id: 'annual-5', name: '5 Connections Annual', price: 300, connections: 5, duration: '1 year', badge: 'Best Value' },
 ]
 
 export default function RenewPage() {
