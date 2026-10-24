@@ -5,25 +5,14 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { siteConfig } from '@/config/site'
+import { getPlan } from '@/lib/plans'
 
-const PLANS: Record<string, { name: string; price: number; connections: number; duration: string }> = {
-  'trial-free': { name: 'Free 24-Hour Trial', price: 0, connections: 1, duration: '24 hours' },
-  'trial-1mo': { name: '1-Month Trial', price: 20, connections: 1, duration: '1 month' },
-  'monthly-1': { name: 'Monthly', price: 30, connections: 1, duration: '1 month' },
-  'annual-1': { name: '1 Connection Annual', price: 175, connections: 1, duration: '1 year' },
-  'annual-2': { name: '2 Connections Annual', price: 225, connections: 2, duration: '1 year' },
-  'annual-3': { name: '3 Connections Annual', price: 250, connections: 3, duration: '1 year' },
-  'annual-4': { name: '4 Connections Annual', price: 275, connections: 4, duration: '1 year' },
-  'annual-5': { name: '5 Connections Annual', price: 300, connections: 5, duration: '1 year' },
-  'lifetime-1': { name: 'Lifetime 1 Connection', price: 600, connections: 1, duration: 'lifetime' },
-  'lifetime-5': { name: 'Lifetime 5 Connections', price: 850, connections: 5, duration: 'lifetime' },
-}
 
 function PaymentContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const planId = searchParams.get('plan') || 'annual-1'
-  const plan = PLANS[planId] || PLANS['annual-1']
+  const plan = getPlan(searchParams.get('plan'))
+  const planId = plan?.id
   
   const [cashAppName, setCashAppName] = useState('')
   const [loading, setLoading] = useState(false)
@@ -37,6 +26,11 @@ function PaymentContent() {
   }, [])
 
   async function checkAuth() {
+    // No (or unknown) plan in the link -> send them to their account to pick one
+    if (!plan) {
+      router.replace('/dashboard')
+      return
+    }
     try {
       const res = await fetch('/api/auth/me')
       const data = await res.json()
@@ -52,44 +46,41 @@ function PaymentContent() {
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!cashAppName.trim()) {
-      setError('Please enter your Cash App name')
-      return
-    }
-    
+  async function submitRequest(body: Record<string, string>) {
     setLoading(true)
     setError('')
-
     try {
       const res = await fetch('/api/payment/cashapp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          planId,
-          planName: plan.name,
-          amountCents: plan.price * 100,
-          connections: plan.connections,
-          duration: plan.duration,
-          cashAppName: cashAppName.trim(),
-        }),
+        body: JSON.stringify(body),
       })
-
       const data = await res.json()
-      if (data.error) {
-        setError(data.error)
+      if (!res.ok || data.error) {
+        setError(data.error || 'Something went wrong. Please try again.')
       } else {
         setSuccess(true)
       }
-    } catch (err) {
+    } catch {
       setError('Something went wrong. Please try again.')
     } finally {
       setLoading(false)
     }
   }
 
-  if (checkingAuth) {
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!plan) return
+    if (!cashAppName.trim()) {
+      setError('Please enter your Cash App name')
+      return
+    }
+    
+    // Only the plan and Cash App name are sent; the server sets the price
+    await submitRequest({ planId: plan.id, cashAppName: cashAppName.trim() })
+  }
+
+  if (checkingAuth || !plan) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">
@@ -100,17 +91,27 @@ function PaymentContent() {
     )
   }
 
-  if (plan.price === 0) {
-    // Free trial - no payment needed
+  if (plan.price === 0 && !success) {
+    // Free trial - no payment needed, just request it
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-md text-center">
           <Image src="/wktv-logo.jpg" alt="WKTV" width={80} height={80} className="mx-auto mb-6 rounded" />
           <h1 className="text-2xl font-bold mb-4">FREE 24-HOUR TRIAL</h1>
-          <p className="text-gray-400 mb-8">No payment required. Start watching now!</p>
-          <Link href="/signup?plan=trial-free" className="btn-primary w-full block text-center">
-            Start Free Trial
-          </Link>
+          <p className="text-gray-400 mb-8">No payment required. Request your trial and we&apos;ll send your login details once it&apos;s activated.</p>
+          {error && (
+            <div className="p-4 mb-6 bg-red-900/30 border border-red-700 text-red-400 text-sm rounded text-left">{error}</div>
+          )}
+          <button
+            onClick={() => submitRequest({ planId: plan.id })}
+            disabled={loading}
+            className="btn-primary w-full disabled:opacity-50"
+          >
+            {loading ? 'Requesting...' : 'Request My Free Trial'}
+          </button>
+          <p className="text-gray-500 text-sm mt-6">
+            <Link href="/dashboard" className="hover:text-white">Go to my account →</Link>
+          </p>
         </div>
       </div>
     )
@@ -121,12 +122,17 @@ function PaymentContent() {
       <div className="min-h-screen bg-black text-white flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-md text-center">
           <div className="text-6xl mb-6">✅</div>
-          <h1 className="text-2xl font-bold mb-4">PAYMENT SUBMITTED!</h1>
-          <p className="text-gray-400 mb-2">We received your payment notification.</p>
-          <p className="text-gray-400 mb-8">We'll verify your Cash App payment and activate your account within a few hours.</p>
-          <p className="text-gray-500 text-sm mb-8">Check your email for confirmation.</p>
+          <h1 className="text-2xl font-bold mb-4">{plan.price === 0 ? 'TRIAL REQUESTED!' : 'PAYMENT SUBMITTED!'}</h1>
+          <p className="text-gray-400 mb-2">
+            {plan.price === 0 ? 'We received your free trial request.' : 'We received your payment notification.'}
+          </p>
+          <p className="text-gray-400 mb-8">
+            {plan.price === 0
+              ? 'We’ll activate your trial shortly. Your account page will show it as active once it’s ready.'
+              : 'We’ll verify your Cash App payment and activate your plan within a few hours. Your account page will show it as active once it’s ready.'}
+          </p>
           <Link href="/dashboard" className="btn-primary">
-            Go to Dashboard
+            Go to My Account
           </Link>
         </div>
       </div>
