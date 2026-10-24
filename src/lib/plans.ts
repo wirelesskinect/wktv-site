@@ -35,3 +35,19 @@ export function getPlan(id: unknown): Plan | null {
 
 // Plans an existing customer can buy or renew from their account.
 export const RENEWABLE_PLANS: Plan[] = PLAN_LIST.filter((p) => p.kind !== 'trial')
+
+// Larger-connection versions of the same plan type. Extra connections can only be
+// chosen when the customer first signs up, so we offer these before they finish.
+export function connectionUpgrades(plan: Plan | null): Plan[] {
+  if (!plan) return []
+  if (plan.kind === 'annual') {
+    return PLAN_LIST.filter((p) => p.kind === 'annual' && p.connections > plan.connections)
+  }
+  if (plan.kind === 'lifetime') {
+    return PLAN_LIST.filter((p) => p.kind === 'lifetime' && p.connections > plan.connections)
+  }
+  return []
+}
+
+// Plans offered in the signup dropdown, in display order
+export const SIGNUP_PLAN_OPTIONS: Plan[] = PLAN_LIST
