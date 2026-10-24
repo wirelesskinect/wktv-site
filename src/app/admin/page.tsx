@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { PLAN_LIST } from '@/lib/plans'
 
 interface PendingSignup {
   id: string
@@ -28,6 +29,33 @@ export default function AdminPage() {
   const [filter, setFilter] = useState<'pending' | 'approved' | 'all'>('pending')
 
   const [panel, setPanel] = useState<any>(null)
+  const [linkForm, setLinkForm] = useState({ email: '', iptvUsername: '', iptvPassword: '', planId: '', expiresAt: '' })
+  const [linkMsg, setLinkMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [linking, setLinking] = useState(false)
+
+  async function linkExisting(e: React.FormEvent) {
+    e.preventDefault()
+    setLinking(true)
+    setLinkMsg(null)
+    try {
+      const res = await fetch('/api/admin/link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(linkForm),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setLinkMsg({ ok: false, text: data.error || 'Could not link this customer.' })
+      } else {
+        setLinkMsg({ ok: true, text: data.message })
+        setLinkForm({ email: '', iptvUsername: '', iptvPassword: '', planId: '', expiresAt: '' })
+      }
+    } catch {
+      setLinkMsg({ ok: false, text: 'Could not link this customer.' })
+    } finally {
+      setLinking(false)
+    }
+  }
 
   useEffect(() => {
     fetchPendingSignups()
@@ -159,6 +187,45 @@ export default function AdminPage() {
             </details>
           )}
         </div>
+
+        {/* Existing customers */}
+        <details className="tile mb-8" style={{ padding: '16px 20px' }}>
+          <summary className="cursor-pointer"><strong>Add existing customer</strong> <span className="text-sm text-gray-400">: connect a line they already have to their website account</span></summary>
+          <p className="text-sm text-gray-400 mt-3">
+            The customer must sign up at wktv.live first. If you enter the line password, the expiration date is read from the IPTV panel automatically; otherwise the date you type is used.
+            Customers can also do this themselves from their account page with their TV app username and password.
+          </p>
+          <form onSubmit={linkExisting} className="grid gap-3 sm:grid-cols-2 mt-4">
+            <div>
+              <label className="field-label" style={{ fontSize: 13 }}>Customer’s website email</label>
+              <input type="email" required value={linkForm.email} onChange={(e) => setLinkForm({ ...linkForm, email: e.target.value })} placeholder="customer@email.com" />
+            </div>
+            <div>
+              <label className="field-label" style={{ fontSize: 13 }}>IPTV username</label>
+              <input type="text" required value={linkForm.iptvUsername} onChange={(e) => setLinkForm({ ...linkForm, iptvUsername: e.target.value })} placeholder="As shown in the panel" autoCapitalize="none" />
+            </div>
+            <div>
+              <label className="field-label" style={{ fontSize: 13 }}>IPTV password (recommended)</label>
+              <input type="text" value={linkForm.iptvPassword} onChange={(e) => setLinkForm({ ...linkForm, iptvPassword: e.target.value })} placeholder="Shown to the customer on their account" autoComplete="off" />
+            </div>
+            <div>
+              <label className="field-label" style={{ fontSize: 13 }}>Plan</label>
+              <select value={linkForm.planId} onChange={(e) => setLinkForm({ ...linkForm, planId: e.target.value })}>
+                <option value="">Not sure / other</option>
+                {PLAN_LIST.filter((p) => p.price > 0).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="field-label" style={{ fontSize: 13 }}>Expiration date</label>
+              <input type="date" value={linkForm.expiresAt} onChange={(e) => setLinkForm({ ...linkForm, expiresAt: e.target.value })} />
+              <p className="field-hint">Optional if you entered the password or picked a lifetime plan.</p>
+            </div>
+            <div className="flex items-end">
+              <button type="submit" disabled={linking} className="btn-primary w-full">{linking ? 'Linking…' : 'Link customer →'}</button>
+            </div>
+          </form>
+          {linkMsg && <div className={`alert ${linkMsg.ok ? 'alert-success' : 'alert-error'} mt-4`}>{linkMsg.text}</div>}
+        </details>
 
         {/* Stats */}
         <div className="grid grid-cols-3 gap-3 sm:gap-6 mb-8">

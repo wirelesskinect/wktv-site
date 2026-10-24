@@ -15,7 +15,7 @@ export interface Plan {
 }
 
 export const PLAN_LIST: Plan[] = [
-  { id: 'trial-free', name: 'Free 24-Hour Trial', price: 0, connections: 1, duration: '24 hours', kind: 'trial' },
+  { id: 'trial-free', name: 'Free 24-Hour Trial', price: 0, connections: 2, duration: '24 hours', kind: 'trial' },
   { id: 'trial-1mo', name: '1-Month Trial', price: 20, connections: 1, duration: '1 month', kind: 'trial' },
   { id: 'monthly-1', name: 'Monthly', price: 30, connections: 1, duration: '1 month', kind: 'monthly' },
   { id: 'annual-1', name: '1 Connection Annual', price: 175, connections: 1, duration: '1 year', kind: 'annual' },

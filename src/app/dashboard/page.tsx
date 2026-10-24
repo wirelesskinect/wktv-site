@@ -31,6 +31,35 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState<'user' | 'pass' | null>(null)
   const [showPass, setShowPass] = useState(false)
+  const [linkOpen, setLinkOpen] = useState(false)
+  const [linkUser, setLinkUser] = useState('')
+  const [linkPass, setLinkPass] = useState('')
+  const [linkError, setLinkError] = useState('')
+  const [linkBusy, setLinkBusy] = useState(false)
+
+  async function connectExisting(e: React.FormEvent) {
+    e.preventDefault()
+    setLinkBusy(true)
+    setLinkError('')
+    try {
+      const res = await fetch('/api/account/link-line', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ iptvUsername: linkUser, iptvPassword: linkPass }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setLinkError(data.error || 'Something went wrong. Please try again.')
+      } else {
+        const sub = await (await fetch('/api/subscription', { cache: 'no-store' })).json()
+        setSubscription(sub?.status ? sub : { status: 'unlinked' })
+      }
+    } catch {
+      setLinkError('Something went wrong. Please try again.')
+    } finally {
+      setLinkBusy(false)
+    }
+  }
   const copy = (text: string, which: 'user' | 'pass') => {
     navigator.clipboard?.writeText(text).then(() => { setCopied(which); setTimeout(() => setCopied(null), 1500) }).catch(() => {})
   }
@@ -99,9 +128,31 @@ export default function DashboardPage() {
               {status === 'pending' ? (
                 <a href="/support.html#connect" className="btn-secondary">Get your device ready while you wait</a>
               ) : (
-                <div className="flex flex-wrap gap-3">
-                  <Link href="/renew" className="btn-primary">Choose a plan →</Link>
-                  <Link href="/pay?plan=trial-free&confirmed=1" className="btn-secondary">Free 24-hour trial</Link>
+                <div>
+                  <div className="flex flex-wrap gap-3">
+                    <Link href="/renew" className="btn-primary">Choose a plan →</Link>
+                    <Link href="/pay?plan=trial-free&confirmed=1" className="btn-secondary">Free 24-hour trial</Link>
+                  </div>
+                  <div className="tile mt-6">
+                    {!linkOpen ? (
+                      <button type="button" className="text-left w-full" onClick={() => setLinkOpen(true)}>
+                        <p className="font-bold">Already a WKTV customer?</p>
+                        <p className="text-sm text-muted">Connect the plan you already have to see your login and expiration date here. →</p>
+                      </button>
+                    ) : (
+                      <form onSubmit={connectExisting}>
+                        <p className="font-bold mb-1">Connect your existing plan</p>
+                        <p className="text-sm text-muted mb-4">Enter the username and password you use in the WKTV / IPTV app.</p>
+                        <label htmlFor="link-user" className="field-label" style={{ fontSize: 13 }}>TV app username</label>
+                        <input id="link-user" type="text" value={linkUser} onChange={(e) => setLinkUser(e.target.value)} autoCapitalize="none" autoComplete="off" spellCheck={false} required maxLength={64} />
+                        <label htmlFor="link-pass" className="field-label mt-3" style={{ fontSize: 13 }}>TV app password</label>
+                        <input id="link-pass" type="password" value={linkPass} onChange={(e) => setLinkPass(e.target.value)} autoComplete="off" required maxLength={64} />
+                        {linkError && <div className="alert alert-error mt-4">{linkError}</div>}
+                        <button type="submit" disabled={linkBusy} className="btn-primary w-full mt-4">{linkBusy ? 'Checking…' : 'Connect my plan →'}</button>
+                        <p className="text-sm text-muted mt-3">Don’t know your login? <Link href="/support?topic=account" className="link">Contact support</Link> and we’ll connect it for you.</p>
+                      </form>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

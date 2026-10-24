@@ -188,7 +188,7 @@ function PaymentContent() {
         <div className="card">
           <ul className="space-y-3 mb-6 text-sm text-gray-200">
             <li>✓&nbsp; 24 hours of live TV, sports, movies &amp; series</li>
-            <li>✓&nbsp; 1 connection on your favorite device</li>
+            <li>✓&nbsp; Trial includes 2 connections</li>
             <li>✓&nbsp; Choose a plan anytime from your account</li>
           </ul>
           <form onSubmit={handleTrial}>
