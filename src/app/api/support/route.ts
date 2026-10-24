@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic'
 import { adminSupabase } from '@/lib/supabase-server';
+import { getSession, getSessionCookieName } from '@/lib/auth';
 
 const PUSHOVER_USER = process.env.PUSHOVER_USER_KEY;
 const PUSHOVER_TOKEN = process.env.PUSHOVER_APP_TOKEN;
@@ -31,14 +32,25 @@ async function sendPushover(title: string, message: string, priority: number = 0
 
 export async function POST(req: NextRequest) {
   try {
-    const { name, email, subject, message, userId } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const clean = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+    const name = clean(body.name, 100);
+    const email = clean(body.email, 200);
+    const subject = clean(body.subject, 40);
+    const message = clean(body.message, 2000);
 
-    if (!email || !message) {
-      return NextResponse.json({ error: 'Email and message required' }, { status: 400 });
+    if (!email || !message || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return NextResponse.json({ error: 'Please enter a valid email and a message.' }, { status: 400 });
     }
+
+    // Link to the account only from the login session (never trust an ID sent by the browser)
+    const token = req.cookies.get(getSessionCookieName())?.value;
+    const sessionUser = token ? await getSession(token) : null;
+    const userId = sessionUser?.id || null;
 
     const subjectLabels: Record<string, string> = {
       account_link: 'Account Link Request',
+      account: 'Login / Password Help',
       billing: 'Billing Question',
       technical: 'Technical Issue',
       other: 'General Inquiry',
@@ -64,7 +76,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Send Pushover notification
-    const pushTitle = `🎫 Omega TV: ${subjectLabels[subject] || 'Support Request'}`;
+    const pushTitle = `🎫 WKTV: ${subjectLabels[subject] || 'Support Request'}`;
     const pushMessage = `From: ${name || 'Unknown'} (${email})\n\n${message.slice(0, 200)}${message.length > 200 ? '...' : ''}`;
     
     // Higher priority for account link requests
