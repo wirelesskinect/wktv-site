@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminFromRequest } from '@/lib/auth';
 export const dynamic = 'force-dynamic'
 import { createServerSupabase, adminSupabase } from '@/lib/supabase-server';
 
@@ -29,11 +30,9 @@ async function sendPushover(title: string, message: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = createServerSupabase();
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user || !ADMIN_EMAILS.includes(user.email || '')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const admin = await getAdminFromRequest(req)
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const { userId, iptvUsername, iptvPassword } = await req.json();
