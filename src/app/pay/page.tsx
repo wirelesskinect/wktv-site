@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { siteConfig } from '@/config/site'
-import { getPlan, connectionUpgrades } from '@/lib/plans'
+import { getPlan, connectionUpgrades, paymentNoteCode, PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/plans'
 import ConnectionWarning from '@/components/ConnectionWarning'
 import TrialIntake from '@/components/TrialIntake'
 import { USERNAME_RULE, PASSWORD_RULE, normalizeUsername, usernameError, passwordError } from '@/lib/iptv-login'
@@ -25,7 +25,11 @@ function PaymentContent() {
   // Already confirmed on the signup page? Then don't ask again.
   const alreadyConfirmed = searchParams.get('confirmed') === '1'
   const [showWarning, setShowWarning] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState<string | null>(null)
+  const [payMethod, setPayMethod] = useState<PaymentMethod>('cashapp')
+  const copyText = (text: string, key: string) => {
+    navigator.clipboard?.writeText(text).then(() => { setCopied(key); setTimeout(() => setCopied(null), 1500) }).catch(() => {})
+  }
   // New customers (no TV line yet) choose the login they'll type into the IPTV app
   const [needsLogin, setNeedsLogin] = useState(false)
   const [iptvUsername, setIptvUsername] = useState('')
@@ -110,12 +114,12 @@ function PaymentContent() {
     const login = loginFields()
     if (!login) return
     if (!cashAppName.trim()) {
-      setError('Please enter your Cash App name')
+      setError(`Please enter the name you paid from on ${PAYMENT_METHOD_LABELS[payMethod]}`)
       return
     }
 
     // Only the plan, login choice and Cash App name are sent; the server sets the price
-    await submitRequest({ planId: plan.id, cashAppName: cashAppName.trim(), ...login })
+    await submitRequest({ planId: plan.id, paymentMethod: payMethod, cashAppName: cashAppName.trim(), ...login })
   }
 
   async function handleTrial(e: React.FormEvent) {
@@ -157,6 +161,16 @@ function PaymentContent() {
 
   const cashTag = siteConfig.cashAppTag
   const cashLink = `https://cash.app/${cashTag}/${plan.price}`
+  const noteCode = paymentNoteCode(plan)
+  const venmoUser = siteConfig.venmoHandle.replace(/^@/, '')
+  const venmoLink = `https://venmo.com/?txn=pay&recipients=${encodeURIComponent(venmoUser)}&amount=${plan.price}&note=${encodeURIComponent(noteCode)}`
+  const methodStyle: Record<PaymentMethod, { color: string; bg: string; border: string }> = {
+    cashapp: { color: '#4ade80', bg: 'linear-gradient(140deg, rgba(0,214,50,.12), rgba(0,0,0,.25))', border: 'rgba(0,214,50,.35)' },
+    zelle: { color: '#c4b5fd', bg: 'linear-gradient(140deg, rgba(109,30,212,.16), rgba(0,0,0,.25))', border: 'rgba(139,92,246,.45)' },
+    venmo: { color: '#7dd3fc', bg: 'linear-gradient(140deg, rgba(0,140,255,.14), rgba(0,0,0,.25))', border: 'rgba(56,189,248,.45)' },
+  }
+  const ms = methodStyle[payMethod]
+  const payTo = payMethod === 'cashapp' ? cashTag : payMethod === 'zelle' ? siteConfig.zellePhone : siteConfig.venmoHandle
 
   if (success) {
     return (
@@ -168,7 +182,7 @@ function PaymentContent() {
           <p className="page-sub mb-6">
             {plan.price === 0
               ? 'We’ll activate your free trial shortly. Your account page will show it as active once it’s ready.'
-              : 'We’ll verify your Cash App payment and activate your plan within a few hours. Your account page will show it as active once it’s ready.'}
+              : 'We’ll verify your payment and activate your plan within a few hours. Your account page will show it as active once it’s ready.'}
           </p>
           <div className="flex flex-col gap-3">
             <Link href="/dashboard" className="btn-primary w-full">Go to my account →</Link>
@@ -251,30 +265,75 @@ function PaymentContent() {
           </div>
         </div>
 
-        {/* Step 1: Cash App */}
+        {/* Step 1: choose how to pay, then send */}
         <div className="mb-6">
-          <p className="field-label"><span className="text-red">01</span>&nbsp; Send ${plan.price} with Cash App</p>
-          <div className="rounded-2xl p-5" style={{ background: 'linear-gradient(140deg, rgba(0,214,50,.12), rgba(0,0,0,.25))', border: '1px solid rgba(0,214,50,.35)' }}>
+          <p className="field-label"><span className="text-red">01</span>&nbsp; Choose how you’ll pay</p>
+          <div className="grid grid-cols-3 gap-2 mb-4" role="tablist" aria-label="Payment method">
+            {(['cashapp', 'zelle', 'venmo'] as PaymentMethod[]).map((m) => (
+              <button key={m} type="button" role="tab" aria-selected={payMethod === m}
+                onClick={() => setPayMethod(m)}
+                className={`tile text-center font-bold ${payMethod === m ? 'is-active' : ''}`}
+                style={{ padding: '10px 8px', borderColor: payMethod === m ? methodStyle[m].border : undefined, color: payMethod === m ? methodStyle[m].color : undefined }}>
+                {PAYMENT_METHOD_LABELS[m]}
+              </button>
+            ))}
+          </div>
+
+          <p className="field-label"><span className="text-red">02</span>&nbsp; Send ${plan.price} with {PAYMENT_METHOD_LABELS[payMethod]}</p>
+          <div className="rounded-2xl p-5" style={{ background: ms.bg, border: `1px solid ${ms.border}` }}>
+            <p className="text-xs uppercase tracking-widest text-muted mb-1">{payMethod === 'zelle' ? 'Zelle to this phone number' : 'Send to'}</p>
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <span className="text-3xl font-extrabold" style={{ fontFamily: 'var(--font-display)', color: '#4ade80' }}>{cashTag}</span>
+              <span className="text-3xl font-extrabold break-all" style={{ fontFamily: 'var(--font-display)', color: ms.color }}>{payTo}</span>
               <button type="button" className="btn-secondary" style={{ minHeight: 40, padding: '8px 14px', fontSize: 13 }}
-                onClick={() => { navigator.clipboard?.writeText(cashTag).then(() => setCopied(true)).catch(() => {}); setTimeout(() => setCopied(false), 1500) }}>
-                {copied ? 'Copied ✓' : 'Copy $Cashtag'}
+                onClick={() => copyText(payMethod === 'zelle' ? payTo.replace(/\D/g, '') : payTo, 'to')}>
+                {copied === 'to' ? 'Copied ✓' : 'Copy'}
               </button>
             </div>
-            <a href={cashLink} target="_blank" rel="noopener noreferrer" className="btn-primary w-full mt-4" style={{ background: 'linear-gradient(135deg,#00d632,#00a827)', boxShadow: '0 10px 30px rgba(0,214,50,.2)' }}>
-              Open Cash App · ${plan.price} ↗
-            </a>
-            <p className="text-xs text-muted mt-3">On a computer? Open Cash App on your phone → Pay → {cashTag} → ${plan.price}.</p>
+
+            {/* Payment note code */}
+            <div className="mt-4 rounded-xl p-4" style={{ background: 'rgba(0,0,0,.35)', border: '1px dashed rgba(255,255,255,.25)' }}>
+              <p className="text-xs uppercase tracking-widest text-muted mb-1">In the payment note, type only</p>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className="text-3xl font-extrabold" style={{ fontFamily: 'var(--font-display)' }}>{noteCode}</span>
+                <button type="button" className="btn-secondary" style={{ minHeight: 40, padding: '8px 14px', fontSize: 13 }}
+                  onClick={() => copyText(noteCode, 'note')}>
+                  {copied === 'note' ? 'Copied ✓' : 'Copy note'}
+                </button>
+              </div>
+              <p className="text-xs text-muted mt-2">
+                Disclaimer: put <b>only {noteCode}</b> in the note. Please don’t write anything else, like the plan or service name.
+                (Codes: A = annual, M = 1 month, L = lifetime; the number is how many connections. Example: A2 = annual, 2 connections.)
+              </p>
+            </div>
+
+            {payMethod === 'cashapp' && (
+              <>
+                <a href={cashLink} target="_blank" rel="noopener noreferrer" className="btn-primary w-full mt-4" style={{ background: 'linear-gradient(135deg,#00d632,#00a827)', boxShadow: '0 10px 30px rgba(0,214,50,.2)' }}>
+                  Open Cash App · ${plan.price} ↗
+                </a>
+                <p className="text-xs text-muted mt-3">On a computer? Open Cash App on your phone → Pay → {cashTag} → ${plan.price} → add note {noteCode}.</p>
+              </>
+            )}
+            {payMethod === 'zelle' && (
+              <p className="text-sm text-muted mt-4">Open your bank’s app → Zelle → Send → enter <b>{siteConfig.zellePhone}</b> → ${plan.price} → memo <b>{noteCode}</b>.</p>
+            )}
+            {payMethod === 'venmo' && (
+              <>
+                <a href={venmoLink} target="_blank" rel="noopener noreferrer" className="btn-primary w-full mt-4" style={{ background: 'linear-gradient(135deg,#3d95ce,#008cff)', boxShadow: '0 10px 30px rgba(0,140,255,.2)' }}>
+                  Open Venmo · ${plan.price} ↗
+                </a>
+                <p className="text-xs text-muted mt-3">On a computer? Open Venmo on your phone → Pay → {siteConfig.venmoHandle} → ${plan.price} → note {noteCode}.</p>
+              </>
+            )}
           </div>
         </div>
 
         {/* Step 2: Confirm */}
         <form onSubmit={handleSubmit}>
           {loginBlock}
-          <label htmlFor="cashapp" className="field-label"><span className="text-red">02</span>&nbsp; Your Cash App name or $Cashtag</label>
+          <label htmlFor="cashapp" className="field-label"><span className="text-red">03</span>&nbsp; {payMethod === 'cashapp' ? 'Your Cash App name or $Cashtag' : payMethod === 'zelle' ? 'Name on your Zelle account' : 'Your Venmo name or @username'}</label>
           <input id="cashapp" type="text" value={cashAppName} onChange={(e) => setCashAppName(e.target.value)}
-            placeholder="$yourcashtag or display name" maxLength={60} required />
+            placeholder={payMethod === 'cashapp' ? '$yourcashtag or display name' : payMethod === 'zelle' ? 'First and last name' : '@yourvenmo or display name'} maxLength={60} required />
           <p className="field-hint">So we can match your payment.</p>
           {error && <div className="alert alert-error mt-4">{error}</div>}
           <button type="submit" disabled={loading} className="btn-primary w-full mt-5">

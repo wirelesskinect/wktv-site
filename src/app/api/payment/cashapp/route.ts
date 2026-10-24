@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getSession, getSessionCookieName } from '@/lib/auth'
-import { getPlan } from '@/lib/plans'
+import { getPlan, paymentNoteCode, PAYMENT_METHODS, PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/plans'
 import { normalizeUsername, usernameError, passwordError } from '@/lib/iptv-login'
 import { isTrialDevice } from '@/lib/devices'
 
@@ -62,13 +62,16 @@ export async function POST(request: NextRequest) {
     }
 
     const isFreeTrial = plan.price === 0
+    // How they paid (Cash App, Zelle or Venmo) and the name/handle they paid from
+    const method: PaymentMethod = PAYMENT_METHODS.includes(body?.paymentMethod) ? body.paymentMethod : 'cashapp'
+    const methodLabel = PAYMENT_METHOD_LABELS[method]
     const cashAppName = typeof body?.cashAppName === 'string' ? body.cashAppName.trim() : ''
     if (!isFreeTrial) {
       if (!cashAppName) {
-        return NextResponse.json({ error: 'Please enter your Cash App name or $Cashtag.' }, { status: 400 })
+        return NextResponse.json({ error: `Please enter the name or ${method === 'zelle' ? 'phone/email' : 'handle'} you paid from on ${methodLabel}.` }, { status: 400 })
       }
       if (cashAppName.length > 60) {
-        return NextResponse.json({ error: 'Cash App name is too long.' }, { status: 400 })
+        return NextResponse.json({ error: 'That name is too long.' }, { status: 400 })
       }
     }
 
@@ -146,7 +149,7 @@ export async function POST(request: NextRequest) {
       plan_id: plan.id,
       plan_name: plan.name,
       amount_cents: amountCents,
-      payment_method: isFreeTrial ? 'trial' : 'cashapp',
+      payment_method: isFreeTrial ? 'trial' : method,
       cashapp_name: isFreeTrial ? null : cashAppName,
       notes: isTrialDevice(body?.device) ? `Device: ${body.device}` : null,
       status: 'pending',
@@ -173,8 +176,8 @@ export async function POST(request: NextRequest) {
         .insert({
           user_id: user.id,
           amount_cents: amountCents,
-          payment_method: 'cashapp',
-          payment_reference: cashAppName,
+          payment_method: method,
+          payment_reference: `${cashAppName} (note ${paymentNoteCode(plan)})`,
           status: 'pending',
         })
       if (paymentError) {
@@ -185,9 +188,9 @@ export async function POST(request: NextRequest) {
     await sendPushover(
       isFreeTrial
         ? '🎁 WKTV Free Trial Request'
-        : `💰 WKTV ${isRenewal ? 'Renewal' : 'Payment'} - $${plan.price}`,
+        : `💰 WKTV ${isRenewal ? 'Renewal' : 'Payment'} - $${plan.price} via ${methodLabel}`,
       `Plan: ${plan.name}\nCustomer: ${userName}\nEmail: ${userEmail}` +
-        (isFreeTrial ? '' : `\nCash App: ${cashAppName}`) +
+        (isFreeTrial ? '' : `\n${methodLabel}: ${cashAppName}\nNote code: ${paymentNoteCode(plan)}`) +
         (requestedUsername ? `\nWants username: ${requestedUsername}` : '') +
         (isTrialDevice(body?.device) ? `\nDevice: ${body.device}` : '') +
         (userPhone ? `\nPhone: ${userPhone}` : '')

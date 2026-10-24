@@ -27,6 +27,18 @@ export const PLAN_LIST: Plan[] = [
   { id: 'lifetime-5', name: 'Lifetime 5 Connections', price: 850, connections: 5, duration: 'lifetime', kind: 'lifetime', badge: 'Best Lifetime Value' },
 ]
 
+// Short code customers type in the payment note (Cash App / Zelle / Venmo), so payments
+// can be matched without naming the service: A = annual, M = 1 month, L = lifetime,
+// followed by the number of connections. Example: A2 = annual, 2 connections.
+export function paymentNoteCode(plan: Plan): string {
+  const letter = plan.kind === 'annual' ? 'A' : plan.kind === 'lifetime' ? 'L' : 'M'
+  return `${letter}${plan.connections}`
+}
+
+export const PAYMENT_METHODS = ['cashapp', 'zelle', 'venmo'] as const
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number]
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = { cashapp: 'Cash App', zelle: 'Zelle', venmo: 'Venmo' }
+
 export const PLANS: Record<string, Plan> = Object.fromEntries(PLAN_LIST.map((p) => [p.id, p]))
 
 export function getPlan(id: unknown): Plan | null {

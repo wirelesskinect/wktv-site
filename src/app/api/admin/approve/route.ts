@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
           connections: plan.connections,
           status: 'active',
           expires_at: expiresAt ? expiresAt.toISOString() : null,
-          payment_method: isFreeTrial ? 'trial' : 'cashapp',
+          payment_method: isFreeTrial ? 'trial' : (signup.payment_method || 'cashapp'),
           payment_reference: signup.cashapp_name,
           updated_at: new Date().toISOString(),
         },

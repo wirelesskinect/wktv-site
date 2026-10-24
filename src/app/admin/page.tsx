@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { PLAN_LIST } from '@/lib/plans'
+import { PLAN_LIST, getPlan, paymentNoteCode, PAYMENT_METHOD_LABELS } from '@/lib/plans'
 
 interface PendingSignup {
   id: string
@@ -151,7 +151,7 @@ export default function AdminPage() {
         <div>
           <span className="eyebrow">Admin</span>
           <h1 className="page-title">Orders &amp; activations</h1>
-          <p className="page-sub">Confirm the Cash App payment before approving. Free trials have no payment.</p>
+          <p className="page-sub">Confirm the payment (Cash App, Zelle or Venmo) and its note code before approving. Free trials have no payment.</p>
         </div>
         <button onClick={() => fetchPendingSignups()} className="btn-secondary">↻ Refresh</button>
       </div>
@@ -295,7 +295,7 @@ export default function AdminPage() {
                   <th className="pb-3 font-medium">Customer</th>
                   <th className="pb-3 font-medium">Plan</th>
                   <th className="pb-3 font-medium">Amount</th>
-                  <th className="pb-3 font-medium">Cash App</th>
+                  <th className="pb-3 font-medium">Paid with</th>
                   <th className="pb-3 font-medium">Status</th>
                   <th className="pb-3 font-medium">Actions</th>
                 </tr>
@@ -329,9 +329,14 @@ export default function AdminPage() {
                       </span>
                     </td>
                     <td className="py-4">
-                      <span className="bg-green-900/30 text-green-400 px-2 py-1 rounded text-sm">
-                        {signup.cashapp_name || (signup.amount_cents === 0 ? 'Free trial' : '—')}
-                      </span>
+                      <div className="bg-green-900/30 text-green-400 px-2 py-1 rounded text-sm inline-block">
+                        {signup.amount_cents === 0 ? 'Free trial' : (
+                          <>
+                            <div>{(PAYMENT_METHOD_LABELS as Record<string, string>)[signup.payment_method] || signup.payment_method}: {signup.cashapp_name || '—'}</div>
+                            {getPlan(signup.plan_id) && <div className="text-xs text-gray-500">Note should say <b>{paymentNoteCode(getPlan(signup.plan_id)!)}</b></div>}
+                          </>
+                        )}
+                      </div>
                     </td>
                     <td className="py-4">
                       <span className={`px-2 py-1 rounded text-xs font-medium ${
