@@ -19,6 +19,7 @@ interface SubscriptionData {
   expiryDate?: string
   daysRemaining?: number
   planName?: string
+  pendingRequest?: { planName: string; amount: number; method: string; requestedAt: string } | null
 }
 
 export default function DashboardPage() {
@@ -147,16 +148,25 @@ export default function DashboardPage() {
             <div className="text-center py-8">
               <div className="text-5xl mb-4">📺</div>
               <h2 className="text-xl font-bold mb-2">
-                {subscription?.status === 'pending' ? 'ACCOUNT PENDING' : 'GET STARTED'}
+                {subscription?.status === 'pending' ? 'AWAITING CONFIRMATION' : 'WELCOME TO WKTV'}
               </h2>
               <p className="text-gray-500 mb-6">
-                {subscription?.status === 'pending' 
-                  ? 'Your account is being set up. Subscribe below if you haven\'t paid yet.'
-                  : 'Subscribe to WKTV to start streaming.'}
+                {subscription?.status === 'pending'
+                  ? subscription?.pendingRequest
+                    ? `We received your request for ${subscription.pendingRequest.planName}${subscription.pendingRequest.amount ? ` ($${subscription.pendingRequest.amount})` : ''}. We’ll activate it shortly.`
+                    : 'Your account is being set up. We’ll activate it shortly.'
+                  : 'Your account is ready. Choose a plan or start a free trial to begin streaming.'}
               </p>
-              <Link href="/renew" className="btn-primary inline-block">
-                Subscribe Now
-              </Link>
+              {subscription?.status !== 'pending' && (
+                <div className="flex flex-wrap gap-3 justify-center">
+                  <Link href="/renew" className="btn-primary inline-block">
+                    Choose a Plan
+                  </Link>
+                  <Link href="/pay?plan=trial-free" className="btn-secondary inline-block">
+                    Free 24-Hour Trial
+                  </Link>
+                </div>
+              )}
               <div className="mt-4">
                 <Link href="/support" className="text-gray-400 hover:text-black text-sm transition-colors">
                   Need help? Contact Support
@@ -202,14 +212,20 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Renew Button */}
-              {(subscription?.status !== 'active' || (subscription?.daysRemaining && subscription.daysRemaining < 7)) && (
-                <div className="mt-8 pt-6 border-t border-gray-200">
+              {/* Renew / upgrade */}
+              <div className="mt-8 pt-6 border-t border-gray-200">
+                {subscription?.pendingRequest ? (
+                  <p className="text-gray-600">
+                    Your request for <b>{subscription.pendingRequest.planName}</b> is waiting for confirmation. We’ll update your plan shortly.
+                  </p>
+                ) : (
                   <Link href="/renew" className="btn-primary inline-block">
-                    Renew Subscription
+                    {subscription?.status !== 'active' || (subscription?.daysRemaining && subscription.daysRemaining < 7)
+                      ? 'Renew Subscription'
+                      : 'Renew or Upgrade'}
                   </Link>
-                </div>
-              )}
+                )}
+              </div>
             </>
           )}
         </div>
