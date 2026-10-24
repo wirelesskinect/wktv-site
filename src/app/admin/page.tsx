@@ -309,6 +309,9 @@ export default function AdminPage() {
                     <td className="py-4">
                       <div className="font-medium">{signup.name}</div>
                       <div className="text-sm text-gray-500">{signup.email}</div>
+                      {signup.notes?.startsWith('Device:') && (
+                        <div className="text-sm text-gray-400">{signup.notes}</div>
+                      )}
                       {signup.requested_username && (
                         <div className="text-sm text-gray-400">Wants login: <b>{signup.requested_username}</b></div>
                       )}

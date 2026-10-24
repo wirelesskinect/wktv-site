@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { siteConfig } from '@/config/site'
 import { getPlan, connectionUpgrades } from '@/lib/plans'
 import ConnectionWarning from '@/components/ConnectionWarning'
+import TrialIntake from '@/components/TrialIntake'
 import { USERNAME_RULE, PASSWORD_RULE, normalizeUsername, usernameError, passwordError } from '@/lib/iptv-login'
 
 
@@ -30,6 +31,7 @@ function PaymentContent() {
   const [iptvUsername, setIptvUsername] = useState('')
   const [iptvPassword, setIptvPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [trialOpen, setTrialOpen] = useState(false)
 
   useEffect(() => {
     checkAuth()
@@ -55,6 +57,7 @@ function PaymentContent() {
       } catch {}
       // No line on file yet -> they pick their TV app username and password here
       setNeedsLogin(!sub?.username)
+      if (plan.price === 0 && !sub?.username) setTrialOpen(true)
       // First-time customers (no plan on file yet) get the add-connections warning
       // before they see payment instructions, since connections can't be added later.
       if (!alreadyConfirmed && connectionUpgrades(plan).length > 0) {
@@ -191,17 +194,32 @@ function PaymentContent() {
             <li>✓&nbsp; Trial includes 2 connections</li>
             <li>✓&nbsp; Choose a plan anytime from your account</li>
           </ul>
-          <form onSubmit={handleTrial}>
-            {loginBlock}
-            {error && <div className="alert alert-error mb-4">{error}</div>}
-            <button type="submit" disabled={loading} className="btn-primary w-full">
-              {loading ? 'Requesting…' : 'Request my free trial →'}
-            </button>
-          </form>
+          {needsLogin ? (
+            <>
+              <p className="text-sm text-muted mb-4">Two quick steps: tell us your device, then create the username and password for your TV app.</p>
+              <button type="button" onClick={() => { setError(''); setTrialOpen(true) }} className="btn-primary w-full">
+                Start my free trial →
+              </button>
+            </>
+          ) : (
+            <form onSubmit={handleTrial}>
+              {error && <div className="alert alert-error mb-4">{error}</div>}
+              <button type="submit" disabled={loading} className="btn-primary w-full">
+                {loading ? 'Requesting…' : 'Request my free trial →'}
+              </button>
+            </form>
+          )}
           <p className="text-center text-sm text-muted mt-5">
             Rather pick a plan? <Link href="/renew" className="link">See all plans</Link>
           </p>
         </div>
+        <TrialIntake
+          open={trialOpen}
+          busy={loading}
+          error={error}
+          onClose={() => setTrialOpen(false)}
+          onSubmit={(data) => submitRequest({ planId: plan.id, ...data })}
+        />
       </div>
     )
   }

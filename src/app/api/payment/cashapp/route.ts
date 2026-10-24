@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { getSession, getSessionCookieName } from '@/lib/auth'
 import { getPlan } from '@/lib/plans'
 import { normalizeUsername, usernameError, passwordError } from '@/lib/iptv-login'
+import { isTrialDevice } from '@/lib/devices'
 
 export const dynamic = 'force-dynamic'
 
@@ -147,6 +148,7 @@ export async function POST(request: NextRequest) {
       amount_cents: amountCents,
       payment_method: isFreeTrial ? 'trial' : 'cashapp',
       cashapp_name: isFreeTrial ? null : cashAppName,
+      notes: isTrialDevice(body?.device) ? `Device: ${body.device}` : null,
       status: 'pending',
     }
     let { data: signup, error: signupError } = await adminSupabase
@@ -187,6 +189,7 @@ export async function POST(request: NextRequest) {
       `Plan: ${plan.name}\nCustomer: ${userName}\nEmail: ${userEmail}` +
         (isFreeTrial ? '' : `\nCash App: ${cashAppName}`) +
         (requestedUsername ? `\nWants username: ${requestedUsername}` : '') +
+        (isTrialDevice(body?.device) ? `\nDevice: ${body.device}` : '') +
         (userPhone ? `\nPhone: ${userPhone}` : '')
     )
 
