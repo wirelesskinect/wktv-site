@@ -92,3 +92,14 @@ details[open]>*:not(summary){animation:fx-rise .45s cubic-bezier(.2,.7,.2,1) bot
   .button::after{display:none}
 }
 @media(max-width:650px){.fx-top{width:40px;height:40px;right:14px;bottom:14px;font-size:17px}}
+
+/* Nav: no visible scrollbar. Tablets wrap the links; phones swipe with a fade hint. */
+nav{scrollbar-width:none;-ms-overflow-style:none}
+nav::-webkit-scrollbar{display:none}
+@media(min-width:651px) and (max-width:950px){
+  nav{overflow:visible;flex-wrap:wrap;white-space:normal;row-gap:12px}
+}
+@media(max-width:650px){
+  nav{-webkit-mask-image:linear-gradient(90deg,#000 85%,transparent);mask-image:linear-gradient(90deg,#000 85%,transparent)}
+  nav a:last-child{padding-right:28px}
+}
