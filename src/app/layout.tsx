@@ -1,20 +1,18 @@
-import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
-
-const inter = Inter({ 
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-inter',
-})
+import { SiteHeader, SiteFooter } from '@/components/SiteChrome'
 
 export const metadata: Metadata = {
-  title: 'WKTV - Watch Anywhere | Stream 10,000+ Channels',
-  description: '10,000+ channels, movies, sports, and live TV. Stream anywhere in the USA on any device.',
+  title: 'WKTV — Your screen. Your way.',
+  description: 'Live sports, TV, and movies. Stream anywhere in the USA on any device. Start with a free 24-hour trial.',
   icons: {
     icon: '/favicon.ico',
     apple: '/apple-touch-icon.png',
   },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#0a0a0c',
 }
 
 export default function RootLayout({
@@ -23,13 +21,13 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={inter.variable}>
-      <body className={`${inter.className} bg-black`}>
-        {/* Promo Banner */}
-        <div className="bg-gradient-to-r from-red-700 to-red-600 text-white text-center py-2 px-4 text-sm font-medium">
-          🎁 <span className="font-bold">FREE 24-Hour Trial!</span> Try before you buy — no credit card required.
+    <html lang="en">
+      <body>
+        <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+          <SiteHeader />
+          <main style={{ flex: 1 }}>{children}</main>
+          <SiteFooter />
         </div>
-        {children}
       </body>
     </html>
   )
