@@ -32,6 +32,18 @@ export async function GET(request: NextRequest) {
     }
     
     const effectiveUserId = user.id
+
+    // Most recent plan request still waiting for admin confirmation (if any)
+    const { data: openRequests } = await adminSupabase
+      .from('pending_signups')
+      .select('plan_name, amount_cents, payment_method, created_at')
+      .eq('user_id', effectiveUserId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+      .limit(1)
+    const pendingRequest = openRequests && openRequests.length
+      ? { planName: openRequests[0].plan_name, amount: Math.round((openRequests[0].amount_cents || 0) / 100), method: openRequests[0].payment_method, requestedAt: openRequests[0].created_at }
+      : null
     
     // Check for linked subscription
     const { data: subscription, error } = await adminSupabase
@@ -41,6 +53,9 @@ export async function GET(request: NextRequest) {
       .single()
     
     if (error || !subscription) {
+      if (pendingRequest) {
+        return NextResponse.json({ status: 'pending', pendingRequest })
+      }
       // Check if pending review
       const { data: pending } = await adminSupabase
         .from('pending_matches')
@@ -97,6 +112,7 @@ export async function GET(request: NextRequest) {
         : 'Unknown',
       daysRemaining: daysRemaining !== null ? Math.max(0, daysRemaining) : null,
       planName: subscription.plan_name || 'WKTV Premium',
+      pendingRequest,
       // Full subscription object for renew page
       subscription: {
         id: subscription.id,
