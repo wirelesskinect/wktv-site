@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminFromRequest } from '@/lib/auth';
 export const dynamic = 'force-dynamic'
-import { createServerSupabase, adminSupabase } from '@/lib/supabase-server';
+import { adminSupabase } from '@/lib/supabase-server';
+import { lookupExpiry } from '@/lib/panel-lookup';
 
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
 
 const PUSHOVER_USER = process.env.PUSHOVER_USER_KEY;
 const PUSHOVER_TOKEN = process.env.PUSHOVER_APP_TOKEN;
@@ -41,22 +41,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Fetch real expiry from IPTV panel
-    let expiresAt = null;
-    try {
-      const AUTOMATION_URL = process.env.AUTOMATION_URL || 'http://149.56.97.159:3007';
-      const lookupRes = await fetch(`${AUTOMATION_URL}/api/lookup/${encodeURIComponent(iptvUsername)}`, {
-        signal: AbortSignal.timeout(10000),
-      });
-      if (lookupRes.ok) {
-        const panelData = await lookupRes.json();
-        if (panelData.expireTimestamp) {
-          expiresAt = new Date(panelData.expireTimestamp * 1000).toISOString();
-        }
-      }
-    } catch (err) {
-      console.error('Panel lookup failed:', err);
-    }
+    // Fetch real expiry from the IPTV panel
+    const panelExpiry = await lookupExpiry(iptvUsername, iptvPassword);
+    const expiresAt = panelExpiry ? panelExpiry.toISOString() : null;
 
     // Check if subscription already exists
     const { data: existing } = await adminSupabase

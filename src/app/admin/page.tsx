@@ -26,9 +26,18 @@ export default function AdminPage() {
   const [error, setError] = useState('')
   const [filter, setFilter] = useState<'pending' | 'approved' | 'all'>('pending')
 
+  const [panel, setPanel] = useState<any>(null)
+
   useEffect(() => {
     fetchPendingSignups()
   }, [filter])
+
+  useEffect(() => {
+    fetch('/api/admin/panel', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then(setPanel)
+      .catch(() => setPanel({ connected: false, error: 'Could not reach the panel check' }))
+  }, [])
 
   async function fetchPendingSignups() {
     setLoading(true)
@@ -59,7 +68,9 @@ export default function AdminPage() {
       if (data.error) {
         alert(data.error)
       } else {
-        alert('Approved! Account created.')
+        const creds = data.credentials ? `\n\nUsername: ${data.credentials.username}\nPassword: ${data.credentials.password}` : ''
+        const exp = data.expiresAt ? `\nExpires: ${new Date(data.expiresAt).toLocaleString()}` : ''
+        alert(`Approved. ${data.message || ''}${creds}${exp}`)
         fetchPendingSignups()
       }
     } catch (err) {
@@ -116,6 +127,38 @@ export default function AdminPage() {
         <button onClick={() => fetchPendingSignups()} className="btn-secondary">↻ Refresh</button>
       </div>
       <div>
+        {/* IPTV panel connection */}
+        <div className="tile mb-8" style={{ padding: '16px 20px' }}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <strong>IPTV panel</strong>
+            <span className={panel?.connected ? 'text-green-400' : 'text-yellow-400'}>
+              {!panel ? 'Checking…' : panel.connected ? '● Connected: approvals create and extend lines automatically' : '● Not connected: approvals run in manual mode'}
+            </span>
+          </div>
+          {panel && !panel.connected && (
+            <p className="text-sm text-gray-400 mt-2">
+              {panel.error ? `Error: ${panel.error}. ` : ''}
+              {panel.missing?.length ? `Missing Vercel settings: ${panel.missing.join(', ')}.` : ''}
+            </p>
+          )}
+          {panel?.plans && (
+            <details className="mt-3 text-sm">
+              <summary className="cursor-pointer text-gray-300">Plans → panel packages</summary>
+              <ul className="mt-2 space-y-1 text-gray-400">
+                {panel.plans.map((p: any) => (
+                  <li key={p.id}>{p.name} <code>({p.id})</code>: {p.packageId ? `package ${p.packageId}` : <span className="text-yellow-400">not set</span>}</li>
+                ))}
+              </ul>
+              {panel.packages && (
+                <div className="mt-3 text-gray-400">
+                  <div>Official packages: {panel.packages.official.map((k: any) => `${k.id} = ${k.name}`).join(' · ') || 'none'}</div>
+                  <div>Trial packages: {panel.packages.trial.map((k: any) => `${k.id} = ${k.name}`).join(' · ') || 'none'}</div>
+                </div>
+              )}
+            </details>
+          )}
+        </div>
+
         {/* Stats */}
         <div className="grid grid-cols-3 gap-3 sm:gap-6 mb-8">
           <div className="card text-center">
