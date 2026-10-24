@@ -2,24 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 import { adminSupabase } from '@/lib/supabase-server'
 import { getSession, getSessionCookieName } from '@/lib/auth'
-
-const AUTOMATION_URL = process.env.AUTOMATION_URL || 'http://149.56.97.159:3007'
-
-async function fetchPanelExpiry(iptvUsername: string): Promise<{ expDate: string | null; expTimestamp: number | null }> {
-  try {
-    const res = await fetch(`${AUTOMATION_URL}/api/lookup/${encodeURIComponent(iptvUsername)}`, {
-      signal: AbortSignal.timeout(10000),
-    })
-    if (!res.ok) return { expDate: null, expTimestamp: null }
-    const data = await res.json()
-    return {
-      expDate: data.expireDate || null,    // "05-10-2026 13:19"
-      expTimestamp: data.expireTimestamp || null,  // Unix timestamp
-    }
-  } catch {
-    return { expDate: null, expTimestamp: null }
-  }
-}
+import { lookupExpiry } from '@/lib/panel-lookup'
 
 export async function GET(request: NextRequest) {
   try {
@@ -77,17 +60,17 @@ export async function GET(request: NextRequest) {
     
     // Fetch real expiry from IPTV panel
     let expiryDate = subscription.expires_at ? new Date(subscription.expires_at) : null
-    const panelData = subscription.iptv_username 
-      ? await fetchPanelExpiry(subscription.iptv_username)
-      : { expDate: null, expTimestamp: null }
-    
+    const panelExpiry = subscription.iptv_username
+      ? await lookupExpiry(subscription.iptv_username, subscription.iptv_password)
+      : null
+
     // Use panel expiry if available (it's the source of truth)
-    if (panelData.expTimestamp) {
-      expiryDate = new Date(panelData.expTimestamp * 1000)
-      
+    if (panelExpiry) {
+      expiryDate = panelExpiry
+
       // Sync back to database if different
       const dbExpiry = subscription.expires_at ? new Date(subscription.expires_at).getTime() : 0
-      if (expiryDate && Math.abs(expiryDate.getTime() - dbExpiry) > 86400000) { // >1 day difference
+      if (Math.abs(expiryDate.getTime() - dbExpiry) > 86400000) { // >1 day difference
         await adminSupabase
           .from('user_subscriptions')
           .update({ expires_at: expiryDate.toISOString() })

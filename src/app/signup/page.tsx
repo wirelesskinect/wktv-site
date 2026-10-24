@@ -133,7 +133,7 @@ function SignupContent() {
           <div>
             <label htmlFor="password" className="field-label">Password</label>
             <input id="password" type="password" autoComplete="new-password" value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })} placeholder="At least 6 characters" minLength={6} required />
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })} placeholder="At least 8 characters" minLength={8} required />
           </div>
 
           <button type="submit" disabled={loading} className="btn-primary w-full">

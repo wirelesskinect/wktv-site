@@ -1,133 +1,183 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAdminFromRequest } from '@/lib/auth'
+import { adminSupabase } from '@/lib/supabase-server'
+import { getPlan, type Plan } from '@/lib/plans'
+import {
+  nxtConfigured,
+  packageIdForPlan,
+  createLine,
+  findLine,
+  extendLine,
+  setLineEnabled,
+  generateCredentials,
+  NxtError,
+} from '@/lib/nxt'
+
 export const dynamic = 'force-dynamic'
-import { createClient } from '@supabase/supabase-js'
 
-const adminSupabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    db: { schema: 'wktv' },
-    auth: { autoRefreshToken: false, persistSession: false }
-  }
-)
-
-// Helper to generate random credentials
-function generateCredentials() {
-  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-  let username = 'wktv_'
-  let password = ''
-  for (let i = 0; i < 8; i++) {
-    username += chars.charAt(Math.floor(Math.random() * chars.length))
-    password += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return { username, password }
-}
-
-// Calculate expiry date based on plan
-function calculateExpiry(planId: string): Date {
-  const now = new Date()
-  if (planId.includes('lifetime')) {
-    // 100 years for lifetime
-    now.setFullYear(now.getFullYear() + 100)
-  } else if (planId.includes('annual')) {
-    now.setFullYear(now.getFullYear() + 1)
-  } else if (planId.includes('monthly') || planId.includes('trial-1mo')) {
-    now.setMonth(now.getMonth() + 1)
-  } else if (planId.includes('trial-free')) {
-    now.setDate(now.getDate() + 1) // 24 hours
-  } else {
-    // Default to 1 month
-    now.setMonth(now.getMonth() + 1)
-  }
-  return now
+// Expiry used only when the IPTV panel isn't connected (manual mode)
+function manualExpiry(plan: Plan, from: Date): Date {
+  const d = new Date(from)
+  if (plan.kind === 'lifetime') d.setFullYear(d.getFullYear() + 100)
+  else if (plan.duration === '24 hours') d.setDate(d.getDate() + 1)
+  else if (plan.duration === '1 year') d.setFullYear(d.getFullYear() + 1)
+  else d.setMonth(d.getMonth() + 1)
+  return d
 }
 
 export async function POST(request: NextRequest) {
+  const admin = await getAdminFromRequest(request)
+  if (!admin) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const body = await request.json().catch(() => ({}))
+  const signupId = body?.signupId
+  if (!signupId) {
+    return NextResponse.json({ error: 'Missing signupId' }, { status: 400 })
+  }
+
+  // Claim the request first so a double-click can't create two lines
+  const { data: claimed } = await adminSupabase
+    .from('pending_signups')
+    .update({ status: 'processing' })
+    .eq('id', signupId)
+    .eq('status', 'pending')
+    .select('*')
+  const signup = claimed && claimed[0]
+  if (!signup) {
+    return NextResponse.json({ error: 'This request was already processed (or not found).' }, { status: 409 })
+  }
+
+  const release = () => adminSupabase.from('pending_signups').update({ status: 'pending' }).eq('id', signupId)
+
   try {
-    const admin = await getAdminFromRequest(request)
-    if (!admin) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const plan = getPlan(signup.plan_id)
+    if (!plan) {
+      await release()
+      return NextResponse.json({ error: `Unknown plan "${signup.plan_id}"` }, { status: 400 })
     }
-    const { signupId } = await request.json()
+    const isFreeTrial = plan.price === 0
 
-    if (!signupId) {
-      return NextResponse.json({ error: 'Missing signupId' }, { status: 400 })
-    }
-
-    // Get the pending signup
-    const { data: signup, error: fetchError } = await adminSupabase
-      .from('pending_signups')
+    const { data: existing } = await adminSupabase
+      .from('user_subscriptions')
       .select('*')
-      .eq('id', signupId)
-      .single()
+      .eq('user_id', signup.user_id)
+      .maybeSingle()
 
-    if (fetchError || !signup) {
-      return NextResponse.json({ error: 'Signup not found' }, { status: 404 })
+    let username: string
+    let password: string
+    let expiresAt: Date | null = null
+    let panelLineId: string | null = null
+    let mode: 'created' | 'extended' | 'manual'
+
+    if (nxtConfigured()) {
+      const packageId = packageIdForPlan(plan.id)
+      if (!packageId) {
+        await release()
+        return NextResponse.json(
+          { error: `No panel package is set for "${plan.name}". Add "${plan.id}" to NXT_PACKAGE_MAP in Vercel, then approve again.` },
+          { status: 400 }
+        )
+      }
+
+      // Renewal: extend the customer's existing line instead of making a new one
+      const line = !isFreeTrial && existing?.iptv_username && existing?.iptv_password
+        ? await findLine(existing.iptv_username, existing.iptv_password)
+        : null
+
+      if (line) {
+        expiresAt = await extendLine(line.id, packageId)
+        if (line.enabled === false) await setLineEnabled(line.id, true)
+        if (!expiresAt) expiresAt = (await findLine(existing.iptv_username, existing.iptv_password))?.expiresAt || null
+        username = existing.iptv_username
+        password = existing.iptv_password
+        panelLineId = line.id
+        mode = 'extended'
+      } else {
+        const creds = generateCredentials()
+        const created = await createLine({
+          packageId,
+          trial: isFreeTrial,
+          username: creds.username,
+          password: creds.password,
+          description: `WKTV:${signup.email || signup.user_id}`,
+        })
+        username = created.username
+        password = created.password
+        expiresAt = created.expiresAt
+        mode = 'created'
+      }
+    } else {
+      // Manual mode: keep a renewing customer's login, otherwise make one for you to enter in the panel
+      if (existing?.iptv_username && !isFreeTrial) {
+        username = existing.iptv_username
+        password = existing.iptv_password
+        const current = existing.expires_at ? new Date(existing.expires_at) : null
+        expiresAt = manualExpiry(plan, current && current > new Date() ? current : new Date())
+      } else {
+        const creds = generateCredentials()
+        username = creds.username
+        password = creds.password
+        expiresAt = manualExpiry(plan, new Date())
+      }
+      mode = 'manual'
     }
 
-    if (signup.status !== 'pending') {
-      return NextResponse.json({ error: 'Signup already processed' }, { status: 400 })
-    }
-
-    // Generate credentials
-    const { username, password } = generateCredentials()
-    const expiresAt = calculateExpiry(signup.plan_id)
-
-    // Extract connections from plan
-    const connections = signup.plan_id.includes('-5') ? 5 :
-                       signup.plan_id.includes('-4') ? 4 :
-                       signup.plan_id.includes('-3') ? 3 :
-                       signup.plan_id.includes('-2') ? 2 : 1
-
-    // Create subscription record
     const { error: subError } = await adminSupabase
       .from('user_subscriptions')
-      .upsert({
-        user_id: signup.user_id,
-        iptv_username: username,
-        iptv_password: password,
-        plan_id: signup.plan_id,
-        plan_name: signup.plan_name,
-        price_cents: signup.amount_cents,
-        connections: connections,
-        status: 'active',
-        expires_at: expiresAt.toISOString(),
-        payment_method: 'cashapp',
-        payment_reference: signup.cashapp_name,
-      }, {
-        onConflict: 'user_id'
-      })
+      .upsert(
+        {
+          user_id: signup.user_id,
+          iptv_username: username,
+          iptv_password: password,
+          plan_id: plan.id,
+          plan_name: plan.name,
+          price_cents: plan.price * 100,
+          connections: plan.connections,
+          status: 'active',
+          expires_at: expiresAt ? expiresAt.toISOString() : null,
+          payment_method: isFreeTrial ? 'trial' : 'cashapp',
+          payment_reference: signup.cashapp_name,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' }
+      )
 
     if (subError) {
-      console.error('Failed to create subscription:', subError)
-      return NextResponse.json({ error: 'Failed to create subscription' }, { status: 500 })
+      console.error('Failed to save subscription:', subError)
+      // The panel line may already exist, so don't put the request back to pending
+      await adminSupabase
+        .from('pending_signups')
+        .update({ status: 'error', notes: `Line ${mode} on panel (${username}) but saving failed: ${subError.message}` })
+        .eq('id', signupId)
+      return NextResponse.json({ error: `Panel step done (${username}) but saving to the database failed. Check this order before retrying.` }, { status: 500 })
     }
 
-    // Update pending signup status
-    await adminSupabase
-      .from('pending_signups')
-      .update({ status: 'approved' })
-      .eq('id', signupId)
-
-    // Update payment status
+    await adminSupabase.from('pending_signups').update({ status: 'approved' }).eq('id', signupId)
     await adminSupabase
       .from('payments')
       .update({ status: 'completed' })
       .eq('user_id', signup.user_id)
       .eq('status', 'pending')
 
-    // TODO: Send email/notification to customer with credentials
+    const message =
+      mode === 'created' ? 'New line created on the IPTV panel.' :
+      mode === 'extended' ? 'Existing line extended on the IPTV panel.' :
+      'Approved in manual mode (panel not connected): create or extend this line in your IPTV panel.'
 
     return NextResponse.json({
       success: true,
-      message: 'Signup approved',
+      mode,
+      message,
+      panelLineId,
       credentials: { username, password },
-      expiresAt: expiresAt.toISOString(),
+      expiresAt: expiresAt ? expiresAt.toISOString() : null,
     })
-
   } catch (error: any) {
     console.error('Error approving signup:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    await release()
+    const msg = error instanceof NxtError ? `IPTV panel: ${error.message}` : 'Approval failed. Nothing was saved; you can try again.'
+    return NextResponse.json({ error: msg }, { status: 502 })
   }
 }
