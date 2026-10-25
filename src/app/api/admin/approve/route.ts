@@ -22,7 +22,7 @@ function manualExpiry(plan: Plan, from: Date): Date {
   if (plan.kind === 'lifetime') d.setFullYear(d.getFullYear() + 100)
   else if (plan.duration === '24 hours') d.setDate(d.getDate() + 1)
   else if (plan.duration === '1 year') d.setFullYear(d.getFullYear() + 1)
-  else d.setMonth(d.getMonth() + 1)
+  else d.setMonth(d.getMonth() + (plan.months || 1))
   return d
 }
 
