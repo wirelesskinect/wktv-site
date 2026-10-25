@@ -73,7 +73,7 @@ export default function RenewPage() {
         <div className="mt-4">
           <span className="eyebrow">{isExisting ? 'Renew or upgrade' : 'Choose a plan'}</span>
           <h1 className="page-title">{isExisting ? 'Keep the good stuff streaming' : 'Pick the plan that fits you'}</h1>
-          <p className="page-sub">Pay with Cash App. We activate your plan once payment is confirmed.</p>
+          <p className="page-sub">Pay with Cash App, Zelle or Venmo. We activate your plan once payment is confirmed.</p>
         </div>
       </div>
 
@@ -81,7 +81,7 @@ export default function RenewPage() {
         <div className="card mb-6 flex flex-wrap items-center justify-between gap-4" style={{ padding: 22 }}>
           <div>
             <p className="text-xs uppercase tracking-widest text-muted">Current IPTV username</p>
-            <p className="text-lg font-bold">@{subscription!.iptv_username}</p>
+            <p className="text-lg font-bold">{subscription!.iptv_username}</p>
           </div>
           <span className={`pill ${daysUntilExpiry === null ? 'pill-gray' : daysUntilExpiry <= 0 ? 'pill-red' : daysUntilExpiry <= 7 ? 'pill-yellow' : 'pill-green'}`}>
             {daysUntilExpiry === null ? subscription!.status : daysUntilExpiry > 0 ? `Expires in ${daysUntilExpiry} days` : 'Expired'}

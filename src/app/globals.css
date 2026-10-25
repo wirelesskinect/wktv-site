@@ -200,7 +200,9 @@ input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:foc
 
 @media (max-width: 900px) {
   .site-header-inner { height: auto; flex-wrap: wrap; padding: 12px 0; gap: 10px 16px; }
-  .site-nav { order: 3; width: 100%; overflow-x: auto; white-space: nowrap; gap: 20px; padding-bottom: 4px; }
+  .site-nav { order: 3; width: 100%; overflow-x: auto; white-space: nowrap; gap: 20px; padding-bottom: 4px; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
+  .site-nav::-webkit-scrollbar { display: none; }
+  .site-nav a { padding: 8px 0; }
   .site-brand img { height: 48px; }
 }
 @media (max-width: 640px) {
