@@ -78,6 +78,38 @@ export default function AdminPage() {
 
   const [linkForm, setLinkForm] = useState({ email: '', iptvUsername: '', iptvPassword: '', planId: '', expiresAt: '' })
   const [linkOpen, setLinkOpen] = useState(false)
+  // Renew a customer's existing line for a payment received outside the site
+  const [renewFor, setRenewFor] = useState<string | null>(null)
+  const [renewPlanId, setRenewPlanId] = useState('monthly-1')
+  const [renewPaidWith, setRenewPaidWith] = useState('cashapp')
+  const [renewNote, setRenewNote] = useState('')
+  const [renewing, setRenewing] = useState(false)
+  const [renewMsg, setRenewMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  async function renewAccount(a: any) {
+    const plan = getPlan(renewPlanId)
+    if (!plan) return
+    if (!window.confirm(`Renew ${a.tvLogin} (${a.email}) with ${plan.name} for $${plan.price}?\n\nThis extends their line on the IPTV panel right away and uses panel credits. Only do this once you've received the payment.`)) return
+    setRenewing(true)
+    setRenewMsg(null)
+    try {
+      const res = await fetch('/api/admin/renew', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: a.id, planId: plan.id, paidWith: renewPaidWith, note: renewNote }),
+      })
+      const data = await res.json()
+      setRenewMsg({ ok: res.ok && !data.error, text: data.error || data.message })
+      if (res.ok && !data.error) {
+        setRenewNote('')
+        loadAccounts()
+      }
+    } catch {
+      setRenewMsg({ ok: false, text: 'Could not renew. Nothing was changed; try again.' })
+    } finally {
+      setRenewing(false)
+    }
+  }
   const [editingExisting, setEditingExisting] = useState(false)
 
   // Open the customer form pre-filled for one account (from the Accounts list)
@@ -334,7 +366,13 @@ export default function AdminPage() {
                     ) : <span className="text-gray-500">No plan</span>}
                     {a.orders > 0 && <div className="text-xs text-gray-500">{a.orders} order{a.orders > 1 ? 's' : ''}{a.pendingOrders ? `, ${a.pendingOrders} waiting` : ''}</div>}
                   </div>
-                  <div>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    {a.tvLogin && (
+                      <button type="button" onClick={() => { setRenewFor(renewFor === a.id ? null : a.id); setRenewMsg(null) }}
+                        className="btn-primary" style={{ minHeight: 36, padding: '6px 12px', fontSize: 13 }}>
+                        {renewFor === a.id ? 'Close' : 'Renew'}
+                      </button>
+                    )}
                     <button type="button" onClick={() => editAccount(a)}
                       className="btn-secondary mr-2" style={{ minHeight: 36, padding: '6px 12px', fontSize: 13 }}>
                       {a.tvLogin ? 'Edit plan' : 'Add plan'}
@@ -346,6 +384,41 @@ export default function AdminPage() {
                       </button>
                     ) : <span className="text-xs text-gray-500">Protected</span>}
                   </div>
+                  {renewFor === a.id && (
+                    <div className="w-full rounded-xl p-4 mt-1" style={{ background: 'rgba(238,48,47,.06)', border: '1px solid rgba(238,48,47,.3)' }}>
+                      <p className="font-bold mb-1">Renew {a.tvLogin}</p>
+                      <p className="text-sm text-gray-400 mb-3">
+                        For a payment you already received. This extends their existing line on the IPTV panel (same username and password) and updates their account page.
+                        {a.pendingOrders ? ' They have an order waiting below. Approve that instead if it’s for this payment.' : ''}
+                      </p>
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div>
+                          <label className="field-label" style={{ fontSize: 13 }}>Plan</label>
+                          <select value={renewPlanId} onChange={(e) => setRenewPlanId(e.target.value)}>
+                            {PLAN_LIST.filter((p) => p.kind !== 'trial').map((p) => <option key={p.id} value={p.id}>{p.name} · ${p.price}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="field-label" style={{ fontSize: 13 }}>Paid with</label>
+                          <select value={renewPaidWith} onChange={(e) => setRenewPaidWith(e.target.value)}>
+                            <option value="cashapp">Cash App</option>
+                            <option value="zelle">Zelle</option>
+                            <option value="venmo">Venmo</option>
+                            <option value="cash">Cash</option>
+                            <option value="other">Other</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="field-label" style={{ fontSize: 13 }}>Note (optional)</label>
+                          <input type="text" value={renewNote} onChange={(e) => setRenewNote(e.target.value)} placeholder="e.g. paid 10/25" maxLength={120} />
+                        </div>
+                      </div>
+                      <button type="button" onClick={() => renewAccount(a)} disabled={renewing} className="btn-primary w-full mt-4">
+                        {renewing ? 'Renewing on the panel…' : `Renew now · ${getPlan(renewPlanId)?.name} · $${getPlan(renewPlanId)?.price}`}
+                      </button>
+                      {renewMsg && <div className={`alert ${renewMsg.ok ? 'alert-success' : 'alert-error'} mt-3`}>{renewMsg.text}</div>}
+                    </div>
+                  )}
                 </div>
               ))}
             {accounts && accounts.length === 0 && <p className="text-sm text-gray-400">No accounts yet.</p>}
