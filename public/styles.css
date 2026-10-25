@@ -37,3 +37,5 @@
 .flyer-grid{grid-template-columns:repeat(3,1fr)}
 @media(max-width:800px){.option-grid{grid-template-columns:1fr}.setup-done-links{margin-left:0}}
 @media(max-width:650px){.flyer-grid{grid-template-columns:1fr 1fr}.setup-done{padding:22px}.setup-done b{font-size:21px}}
+
+/* Freezing/buffering help section */.help-steps ol{margin-top:0;margin-bottom:0}.help-steps li{padding-block:6px}.help-steps li>b:first-child{color:#fff}.help-limit{margin-top:18px;border-left-color:#ee302f;background:linear-gradient(90deg,#2a1417,#1a1416);border-radius:0 10px 10px 0}.help-limit b{color:#ff8f8f;font-size:14px;letter-spacing:.2px}.help-limit p{margin:6px 0 0;font-size:15px;line-height:1.7;color:#d6d6de}.help-still{margin-top:22px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px}.help-still p{margin:0;flex:1 1 320px}.help-still .button{min-height:50px;padding:14px 22px}@media(max-width:650px){.help-steps li{padding-block:5px}.help-limit p{font-size:14px}.help-still .button{width:100%;justify-content:center}}
