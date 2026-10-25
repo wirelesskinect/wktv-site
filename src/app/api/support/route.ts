@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic'
 import { adminSupabase } from '@/lib/supabase-server';
 import { getSession, getSessionCookieName } from '@/lib/auth';
+import { clientIp } from '@/lib/rate-limit';
 
 const PUSHOVER_USER = process.env.PUSHOVER_USER_KEY;
 const PUSHOVER_TOKEN = process.env.PUSHOVER_APP_TOKEN;
@@ -42,6 +43,20 @@ export async function POST(req: NextRequest) {
     if (!email || !message || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ error: 'Please enter a valid email and a message.' }, { status: 400 });
     }
+
+    // Spam guard: max 5 messages per network per hour
+    const ip = clientIp(req.headers);
+    const since = new Date(Date.now() - 60 * 60_000).toISOString();
+    const { count } = await adminSupabase
+      .from('auth_attempts')
+      .select('id', { count: 'exact', head: true })
+      .eq('kind', 'support')
+      .eq('ip', ip)
+      .gte('created_at', since);
+    if ((count || 0) >= 5) {
+      return NextResponse.json({ error: 'You’ve sent several messages recently. Please wait a bit, or reach us in the Facebook support group.' }, { status: 429 });
+    }
+    await adminSupabase.from('auth_attempts').insert({ kind: 'support', email: email.toLowerCase(), ip });
 
     // Link to the account only from the login session (never trust an ID sent by the browser)
     const token = req.cookies.get(getSessionCookieName())?.value;
