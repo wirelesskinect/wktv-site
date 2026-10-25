@@ -3,6 +3,7 @@ import { getAdminFromRequest } from '@/lib/auth'
 import { adminSupabase } from '@/lib/supabase-server'
 import { getPlan } from '@/lib/plans'
 import { nxtConfigured, findLine } from '@/lib/nxt'
+import { recordHistoricSale } from '@/lib/sales'
 
 export const dynamic = 'force-dynamic'
 
@@ -96,9 +97,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Couldn’t save: ${error.message}` }, { status: 500 })
     }
 
+    // Sales dashboard: count this existing customer's plan once (annual started 30+ days ago = last year's price)
+    const historic = plan ? await recordHistoricSale(user.id, plan.id, expiresAt) : false
+
     return NextResponse.json({
       success: true,
-      message: `Linked ${iptvUsername} to ${email}. Expires ${expiresAt!.toLocaleDateString('en-US')} (${source === 'panel' ? 'read from the panel' : 'as entered'}).${panelNote}`,
+      message: `Linked ${iptvUsername} to ${email}. Expires ${expiresAt!.toLocaleDateString('en-US')} (${source === 'panel' ? 'read from the panel' : 'as entered'}).${historic ? ' Added to the sales dashboard as a historic sale.' : ''}${panelNote}`,
     })
   } catch (error: any) {
     console.error('Admin link error:', error)

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getSession, getSessionCookieName } from '@/lib/auth'
+import { insertPayment } from '@/lib/sales'
 import { getPlan, paymentNoteCode, PAYMENT_METHODS, PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/plans'
 import { normalizeUsername, usernameError, passwordError } from '@/lib/iptv-login'
 import { isTrialDevice } from '@/lib/devices'
@@ -171,15 +172,14 @@ export async function POST(request: NextRequest) {
     }
 
     if (!isFreeTrial) {
-      const { error: paymentError } = await adminSupabase
-        .from('payments')
-        .insert({
-          user_id: user.id,
-          amount_cents: amountCents,
-          payment_method: method,
-          payment_reference: `${cashAppName} (note ${paymentNoteCode(plan)})`,
-          status: 'pending',
-        })
+      const paymentError = await insertPayment({
+        user_id: user.id,
+        amount_cents: amountCents,
+        payment_method: method,
+        payment_reference: `${cashAppName} (note ${paymentNoteCode(plan)})`,
+        status: 'pending',
+        plan_id: plan.id,
+      })
       if (paymentError) {
         console.error('Failed to create payment record:', paymentError)
       }
