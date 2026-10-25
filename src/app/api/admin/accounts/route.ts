@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
 
   const [usersRes, subsRes, ordersRes] = await Promise.all([
     adminSupabase.from('users').select('id, email, name, phone, role, created_at').order('created_at', { ascending: false }).limit(1000),
-    adminSupabase.from('user_subscriptions').select('user_id, iptv_username, plan_name, status, expires_at').limit(2000),
+    adminSupabase.from('user_subscriptions').select('user_id, iptv_username, plan_id, plan_name, status, expires_at').limit(2000),
     adminSupabase.from('pending_signups').select('user_id, status').limit(5000),
   ])
   if (usersRes.error) {
@@ -40,6 +40,7 @@ export async function GET(req: NextRequest) {
       role: u.role,
       createdAt: u.created_at,
       tvLogin: s?.iptv_username || null,
+      planId: s?.plan_id || null,
       planName: s?.plan_name || null,
       planStatus: s?.status || null,
       expiresAt: s?.expires_at || null,

@@ -77,6 +77,23 @@ export default function AdminPage() {
   }
 
   const [linkForm, setLinkForm] = useState({ email: '', iptvUsername: '', iptvPassword: '', planId: '', expiresAt: '' })
+  const [linkOpen, setLinkOpen] = useState(false)
+  const [editingExisting, setEditingExisting] = useState(false)
+
+  // Open the customer form pre-filled for one account (from the Accounts list)
+  function editAccount(a: any) {
+    setLinkForm({
+      email: a.email || '',
+      iptvUsername: a.tvLogin || '',
+      iptvPassword: '',
+      planId: a.planId || '',
+      expiresAt: a.expiresAt ? new Date(a.expiresAt).toISOString().slice(0, 10) : '',
+    })
+    setEditingExisting(!!a.tvLogin)
+    setLinkMsg(null)
+    setLinkOpen(true)
+    setTimeout(() => document.getElementById('customer-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+  }
   const [linkMsg, setLinkMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [linking, setLinking] = useState(false)
 
@@ -96,6 +113,8 @@ export default function AdminPage() {
       } else {
         setLinkMsg({ ok: true, text: data.message })
         setLinkForm({ email: '', iptvUsername: '', iptvPassword: '', planId: '', expiresAt: '' })
+        setEditingExisting(false)
+        loadAccounts()
       }
     } catch {
       setLinkMsg({ ok: false, text: 'Could not link this customer.' })
@@ -236,8 +255,8 @@ export default function AdminPage() {
         </div>
 
         {/* Existing customers */}
-        <details className="tile mb-8" style={{ padding: '16px 20px' }}>
-          <summary className="cursor-pointer"><strong>Add existing customer</strong> <span className="text-sm text-gray-400">: connect a line they already have to their website account</span></summary>
+        <details id="customer-form" open={linkOpen} onToggle={(e) => setLinkOpen((e.target as HTMLDetailsElement).open)} className="tile mb-8" style={{ padding: '16px 20px' }}>
+          <summary className="cursor-pointer"><strong>{editingExisting ? `Edit plan for ${linkForm.email}` : 'Add or edit a customer’s TV line & plan'}</strong> <span className="text-sm text-gray-400">: or click <b>Edit plan</b> next to an account below</span></summary>
           <p className="text-sm text-gray-400 mt-3">
             The customer must sign up at wktv.live first. If you enter the line password, the expiration date is read from the IPTV panel automatically; otherwise the date you type is used.
             Customers can also do this themselves from their account page with their TV app username and password.
@@ -253,7 +272,8 @@ export default function AdminPage() {
             </div>
             <div>
               <label className="field-label" style={{ fontSize: 13 }}>IPTV password (recommended)</label>
-              <input type="text" value={linkForm.iptvPassword} onChange={(e) => setLinkForm({ ...linkForm, iptvPassword: e.target.value })} placeholder="Shown to the customer on their account" autoComplete="off" />
+              <input type="text" value={linkForm.iptvPassword} onChange={(e) => setLinkForm({ ...linkForm, iptvPassword: e.target.value })} placeholder={editingExisting ? 'Leave blank to keep the saved password' : 'Shown to the customer on their account'} autoComplete="off" />
+              {editingExisting && <p className="field-hint">Switching them to a different TV username? Enter that line’s password too.</p>}
             </div>
             <div>
               <label className="field-label" style={{ fontSize: 13 }}>Plan</label>
@@ -264,11 +284,12 @@ export default function AdminPage() {
             </div>
             <div>
               <label className="field-label" style={{ fontSize: 13 }}>Expiration date</label>
-              <input type="date" value={linkForm.expiresAt} onChange={(e) => setLinkForm({ ...linkForm, expiresAt: e.target.value })} />
+              <input type="date" value={linkForm.expiresAt} onChange={(e) => setLinkForm({ ...linkForm, expiresAt: e.target.value })}
+                style={{ width: '100%', colorScheme: 'dark', background: 'rgba(255,255,255,.04)', color: '#fff', border: '1px solid rgba(255,255,255,.12)', borderRadius: 12, padding: '12px 14px', minHeight: 48 }} />
               <p className="field-hint">Optional if you entered the password or picked a lifetime plan.</p>
             </div>
             <div className="flex items-end">
-              <button type="submit" disabled={linking} className="btn-primary w-full">{linking ? 'Linking…' : 'Link customer →'}</button>
+              <button type="submit" disabled={linking} className="btn-primary w-full">{linking ? 'Saving…' : editingExisting ? 'Save changes →' : 'Link customer →'}</button>
             </div>
           </form>
           {linkMsg && <div className={`alert ${linkMsg.ok ? 'alert-success' : 'alert-error'} mt-4`}>{linkMsg.text}</div>}
@@ -314,6 +335,10 @@ export default function AdminPage() {
                     {a.orders > 0 && <div className="text-xs text-gray-500">{a.orders} order{a.orders > 1 ? 's' : ''}{a.pendingOrders ? `, ${a.pendingOrders} waiting` : ''}</div>}
                   </div>
                   <div>
+                    <button type="button" onClick={() => editAccount(a)}
+                      className="btn-secondary mr-2" style={{ minHeight: 36, padding: '6px 12px', fontSize: 13 }}>
+                      {a.tvLogin ? 'Edit plan' : 'Add plan'}
+                    </button>
                     {a.role !== 'admin' && !a.isYou ? (
                       <button type="button" onClick={() => deleteAccount(a)} disabled={deleting === a.id}
                         className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded text-sm disabled:opacity-50">
