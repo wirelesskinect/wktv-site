@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import SalesDashboard from '@/components/SalesDashboard'
 import { PLAN_LIST, getPlan, paymentNoteCode, PAYMENT_METHOD_LABELS } from '@/lib/plans'
 
 interface PendingSignup {
@@ -325,6 +326,12 @@ export default function AdminPage() {
             </div>
           </form>
           {linkMsg && <div className={`alert ${linkMsg.ok ? 'alert-success' : 'alert-error'} mt-4`}>{linkMsg.text}</div>}
+        </details>
+
+        {/* Sales & signups dashboard */}
+        <details open className="tile mb-8" style={{ padding: '16px 20px' }}>
+          <summary className="cursor-pointer"><strong>Sales</strong> <span className="text-sm text-gray-400">: revenue, signups and plans over time</span></summary>
+          <div className="mt-4"><SalesDashboard /></div>
         </details>
 
         {/* All website accounts */}

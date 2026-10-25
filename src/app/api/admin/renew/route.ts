@@ -3,6 +3,7 @@ import { getAdminFromRequest } from '@/lib/auth'
 import { adminSupabase } from '@/lib/supabase-server'
 import { getPlan, type Plan } from '@/lib/plans'
 import { nxtConfigured, packageIdForPlan, findLine, extendLine, setLineEnabled, NxtError } from '@/lib/nxt'
+import { insertPayment } from '@/lib/sales'
 
 export const dynamic = 'force-dynamic'
 
@@ -105,13 +106,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `The line was ${mode === 'panel' ? 'extended on the panel' : 'renewed'}, but saving to the website failed: ${subError.message}. Don’t renew again; refresh and check the date.` }, { status: 500 })
   }
 
-  await adminSupabase.from('payments').insert({
+  await insertPayment({
     user_id: userId,
     subscription_id: sub.id,
     amount_cents: plan.price * 100,
     payment_method: paidWith,
     payment_reference: `Manual renewal by admin${note ? `: ${note}` : ''}`,
     status: 'completed',
+    plan_id: plan.id,
   })
 
   const when = expiresAt ? expiresAt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'unknown'
