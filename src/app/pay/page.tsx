@@ -243,7 +243,7 @@ function PaymentContent() {
       <div className="text-center mb-7">
         <span className="eyebrow">Checkout</span>
         <h1 className="page-title">Complete your payment</h1>
-        <p className="page-sub">Two quick steps: send with Cash App, then confirm below.</p>
+        <p className="page-sub">Pay with Cash App, Zelle or Venmo, then confirm below.</p>
       </div>
 
       <div className="card">
