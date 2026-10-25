@@ -29,6 +29,53 @@ export default function AdminPage() {
   const [filter, setFilter] = useState<'pending' | 'approved' | 'all'>('pending')
 
   const [panel, setPanel] = useState<any>(null)
+  const [accounts, setAccounts] = useState<any[] | null>(null)
+  const [accountSearch, setAccountSearch] = useState('')
+  const [accountMsg, setAccountMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
+
+  async function loadAccounts() {
+    try {
+      const res = await fetch('/api/admin/accounts', { cache: 'no-store' })
+      const data = await res.json()
+      setAccounts(Array.isArray(data.accounts) ? data.accounts : [])
+    } catch {
+      setAccounts([])
+    }
+  }
+
+  useEffect(() => { loadAccounts() }, [])
+
+  async function deleteAccount(a: any) {
+    const typed = window.prompt(
+      `Permanently delete ${a.email}?\n\nThis removes the account, its login sessions, plan record, orders and payments. It can't be undone.` +
+      (a.tvLogin ? `\n\nTheir TV line "${a.tvLogin}" will stay on your IPTV panel.` : '') +
+      `\n\nType the email to confirm:`
+    )
+    if (typed === null) return
+    if (typed.trim().toLowerCase() !== String(a.email).toLowerCase()) {
+      setAccountMsg({ ok: false, text: 'The email didn’t match, so nothing was deleted.' })
+      return
+    }
+    setDeleting(a.id)
+    setAccountMsg(null)
+    try {
+      const res = await fetch('/api/admin/accounts', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: a.id, confirmEmail: typed.trim() }),
+      })
+      const data = await res.json()
+      setAccountMsg({ ok: res.ok && !data.error, text: data.error || data.message })
+      await loadAccounts()
+      fetchPendingSignups()
+    } catch {
+      setAccountMsg({ ok: false, text: 'Could not delete this account.' })
+    } finally {
+      setDeleting(null)
+    }
+  }
+
   const [linkForm, setLinkForm] = useState({ email: '', iptvUsername: '', iptvPassword: '', planId: '', expiresAt: '' })
   const [linkMsg, setLinkMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [linking, setLinking] = useState(false)
@@ -225,6 +272,59 @@ export default function AdminPage() {
             </div>
           </form>
           {linkMsg && <div className={`alert ${linkMsg.ok ? 'alert-success' : 'alert-error'} mt-4`}>{linkMsg.text}</div>}
+        </details>
+
+        {/* All website accounts */}
+        <details open className="tile mb-8" style={{ padding: '16px 20px' }}>
+          <summary className="cursor-pointer">
+            <strong>Accounts</strong> <span className="text-sm text-gray-400">: {accounts ? `${accounts.length} total` : 'loading…'}</span>
+          </summary>
+          <div className="flex flex-wrap gap-3 items-center mt-4">
+            <input type="search" value={accountSearch} onChange={(e) => setAccountSearch(e.target.value)}
+              placeholder="Search email, name or TV login" style={{ maxWidth: 360 }} />
+            <button type="button" onClick={loadAccounts} className="btn-secondary" style={{ minHeight: 40, padding: '8px 14px', fontSize: 13 }}>↻ Refresh</button>
+          </div>
+          {accountMsg && <div className={`alert ${accountMsg.ok ? 'alert-success' : 'alert-error'} mt-4`}>{accountMsg.text}</div>}
+          <div className="mt-4 grid gap-2">
+            {(accounts || [])
+              .filter((a) => {
+                const q = accountSearch.trim().toLowerCase()
+                return !q || [a.email, a.name, a.tvLogin].some((v) => String(v || '').toLowerCase().includes(q))
+              })
+              .map((a) => (
+                <div key={a.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-800/60 py-3">
+                  <div className="min-w-0" style={{ flex: '1 1 260px' }}>
+                    <div className="font-medium break-all">
+                      {a.email}
+                      {a.role === 'admin' && <span className="ml-2 text-xs text-yellow-400">ADMIN</span>}
+                      {a.isYou && <span className="ml-2 text-xs text-gray-400">(you)</span>}
+                    </div>
+                    <div className="text-sm text-gray-400">
+                      {a.name || 'No name'} · joined {new Date(a.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      {a.phone ? ` · ${a.phone}` : ''}
+                    </div>
+                  </div>
+                  <div className="text-sm text-gray-300" style={{ flex: '1 1 200px' }}>
+                    {a.tvLogin ? (
+                      <>
+                        TV login <b>{a.tvLogin}</b> · {a.planStatus || '—'}
+                        {a.expiresAt && <span className="text-gray-400"> · expires {new Date(a.expiresAt).toLocaleDateString('en-US')}</span>}
+                      </>
+                    ) : <span className="text-gray-500">No plan</span>}
+                    {a.orders > 0 && <div className="text-xs text-gray-500">{a.orders} order{a.orders > 1 ? 's' : ''}{a.pendingOrders ? `, ${a.pendingOrders} waiting` : ''}</div>}
+                  </div>
+                  <div>
+                    {a.role !== 'admin' && !a.isYou ? (
+                      <button type="button" onClick={() => deleteAccount(a)} disabled={deleting === a.id}
+                        className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded text-sm disabled:opacity-50">
+                        {deleting === a.id ? 'Deleting…' : 'Delete'}
+                      </button>
+                    ) : <span className="text-xs text-gray-500">Protected</span>}
+                  </div>
+                </div>
+              ))}
+            {accounts && accounts.length === 0 && <p className="text-sm text-gray-400">No accounts yet.</p>}
+          </div>
         </details>
 
         {/* Stats */}
