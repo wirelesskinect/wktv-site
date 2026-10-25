@@ -58,7 +58,12 @@ export async function POST(request: NextRequest) {
   }
   if (!line) {
     await recordFail()
-    return NextResponse.json({ error: 'That username and password don’t match an active WKTV line. Check them in your TV app and try again.' }, { status: 400 })
+    return NextResponse.json({ error: 'That username and password don’t match a WKTV line. They’re case-sensitive, so type capital and small letters exactly as they appear in your TV app.' }, { status: 400 })
+  }
+  // Usernames are case-sensitive: the one typed must match the panel exactly
+  if (line.username && line.username !== username) {
+    await recordFail()
+    return NextResponse.json({ error: 'Check the capital and small letters in your username. It must match your TV app exactly.' }, { status: 400 })
   }
 
   // A line can only belong to one website account

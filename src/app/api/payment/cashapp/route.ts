@@ -109,6 +109,11 @@ export async function POST(request: NextRequest) {
     const isRenewal = !!(existingSub && existingSub.length)
     const hasLine = !!(existingSub && existingSub[0]?.iptv_username)
 
+    // 3- and 6-month renewals are only for customers who already have a line
+    if (plan.renewOnly && !hasLine) {
+      return NextResponse.json({ error: `${plan.name} is a renewal for current customers. Connect your existing TV login first, or choose a different plan.` }, { status: 400 })
+    }
+
     // New customers choose the username and password they'll type into the TV app
     let requestedUsername: string | null = null
     let requestedPassword: string | null = null
