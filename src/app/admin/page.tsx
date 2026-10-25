@@ -184,6 +184,14 @@ export default function AdminPage() {
   }
 
   async function approveSignup(signupId: string) {
+    const order: any = pendingSignups.find((s: any) => s.id === signupId)
+    if (order && !order.existing_tv_login && order.amount_cents > 0) {
+      const ok = window.confirm(
+        `This creates a NEW TV line${order.requested_username ? ` (“${order.requested_username}”)` : ''} for ${order.email}.\n\n` +
+        `If this customer already has WKTV, click Cancel, then use “Edit plan” in Accounts to connect their existing login first. Approving after that will renew their current line instead.`
+      )
+      if (!ok) return
+    }
     setProcessing(signupId)
     try {
       const res = await fetch('/api/admin/approve', {
@@ -518,6 +526,9 @@ export default function AdminPage() {
                       )}
                     </td>
                     <td className="py-4">
+                      {(signup as any).existing_tv_login
+                        ? <span className="inline-block text-xs font-bold px-2 py-0.5 rounded mb-1" style={{ background: 'rgba(34,197,94,.15)', color: '#86efac' }}>RENEWAL · {(signup as any).existing_tv_login}</span>
+                        : <span className="inline-block text-xs font-bold px-2 py-0.5 rounded mb-1" style={{ background: 'rgba(234,179,8,.15)', color: '#fde68a' }}>NEW LINE</span>}
                       <div className="font-medium">{signup.plan_name}</div>
                       <div className="text-sm text-gray-500">{signup.plan_id}</div>
                     </td>
