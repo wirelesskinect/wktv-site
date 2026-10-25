@@ -87,6 +87,19 @@ export async function POST(request: NextRequest) {
         ? await findLine(existing.iptv_username, existing.iptv_password)
         : null
 
+      // A customer who already has a line on file must be extended, never given a second line.
+      // If their saved login doesn't match the panel, stop so the admin can fix it first.
+      if (!line && !isFreeTrial && existing?.iptv_username) {
+        await release()
+        const why = existing.iptv_password
+          ? `the saved password for "${existing.iptv_username}" doesn't match the panel`
+          : `no password is saved for "${existing.iptv_username}"`
+        return NextResponse.json(
+          { error: `Couldn't find this customer's existing line on the IPTV panel (${why}). Fix it with "Add existing customer" (same email, username and the correct password), then approve again. Nothing was created or charged.` },
+          { status: 409 }
+        )
+      }
+
       if (line) {
         expiresAt = await extendLine(line.id, packageId)
         if (line.enabled === false) await setLineEnabled(line.id, true)
