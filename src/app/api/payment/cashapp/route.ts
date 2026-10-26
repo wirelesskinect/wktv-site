@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
     const referralInput = typeof body?.referralUsername === 'string' ? body.referralUsername.trim() : ''
     if (isFreeTrial && referralInput) {
       const notFound = NextResponse.json(
-        { error: 'We couldn’t find that referral username. Check the spelling (capital letters count) or leave it blank.', field: 'referral' },
+        { error: 'We couldn’t find that referral code. It’s your friend’s WKTV username: check the spelling (capital letters count) or leave it blank.', field: 'referral' },
         { status: 400 }
       )
       if (referralInput.length > 64) return notFound
@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
       const match = refLine && refLine[0]
       if (!match || match.iptv_username !== referralInput) return notFound
       if (match.user_id === user.id || referralInput === requestedUsername) {
-        return NextResponse.json({ error: 'You can’t use your own username as the referral.', field: 'referral' }, { status: 400 })
+        return NextResponse.json({ error: 'You can’t use your own username as the referral code.', field: 'referral' }, { status: 400 })
       }
       referrer = { userId: match.user_id, username: match.iptv_username }
     }

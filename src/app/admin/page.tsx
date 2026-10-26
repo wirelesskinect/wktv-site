@@ -593,7 +593,7 @@ function ReferralsSection() {
     <details open className="tile mb-8" style={{ padding: '16px 20px' }}>
       <summary className="cursor-pointer">
         <strong>Referrals</strong>{' '}
-        <span className="text-sm text-gray-400">: {due ? `${due} free month${due > 1 ? 's' : ''} to give` : 'friends who started a trial with a referral username'}</span>
+        <span className="text-sm text-gray-400">: {due ? `${due} free month${due > 1 ? 's' : ''} to give` : 'friends who started a trial with a referral code'}</span>
       </summary>
       <div className="mt-4"><ReferralsPanel onDueCount={setDue} /></div>
     </details>
