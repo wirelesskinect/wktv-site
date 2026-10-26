@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
+import { saveRefFromUrl } from '@/lib/referral'
 
 const FB_GROUP = 'https://www.facebook.com/groups/wktvsupport'
 
@@ -13,6 +14,9 @@ export function SiteHeader() {
   const router = useRouter()
   const [user, setUser] = useState<{ name: string | null; email: string; role: string } | null>(null)
   const [checked, setChecked] = useState(false)
+
+  // Remember a referral link's ?ref= so it's filled in when the friend starts their trial
+  useEffect(() => { saveRefFromUrl() }, [pathname])
 
   useEffect(() => {
     let cancelled = false

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import SalesDashboard from '@/components/SalesDashboard'
+import ReferralsPanel from '@/components/ReferralsPanel'
 import { PLAN_LIST, getPlan, paymentNoteCode, PAYMENT_METHOD_LABELS } from '@/lib/plans'
 
 interface PendingSignup {
@@ -334,6 +335,9 @@ export default function AdminPage() {
           <div className="mt-4"><SalesDashboard /></div>
         </details>
 
+        {/* Referrals: free month for the referrer when their friend buys a 1-year plan */}
+        <ReferralsSection />
+
         {/* All website accounts */}
         <details open className="tile mb-8" style={{ padding: '16px 20px' }}>
           <summary className="cursor-pointer">
@@ -514,7 +518,7 @@ export default function AdminPage() {
                     <td className="py-4">
                       <div className="font-medium">{signup.name}</div>
                       <div className="text-sm text-gray-500">{signup.email}</div>
-                      {signup.notes?.startsWith('Device:') && (
+                      {(signup.notes?.startsWith('Device:') || signup.notes?.startsWith('Referred by:')) && (
                         <div className="text-sm text-gray-400">{signup.notes}</div>
                       )}
                       {signup.requested_username && (
@@ -580,5 +584,18 @@ export default function AdminPage() {
         )}
       </div>
     </div>
+  )
+}
+
+function ReferralsSection() {
+  const [due, setDue] = useState(0)
+  return (
+    <details open className="tile mb-8" style={{ padding: '16px 20px' }}>
+      <summary className="cursor-pointer">
+        <strong>Referrals</strong>{' '}
+        <span className="text-sm text-gray-400">: {due ? `${due} free month${due > 1 ? 's' : ''} to give` : 'friends who started a trial with a referral username'}</span>
+      </summary>
+      <div className="mt-4"><ReferralsPanel onDueCount={setDue} /></div>
+    </details>
   )
 }

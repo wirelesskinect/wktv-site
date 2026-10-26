@@ -3,12 +3,13 @@
 import { useEffect, useState } from 'react'
 import { USERNAME_RULE, PASSWORD_RULE, normalizeUsername, usernameError, passwordError } from '@/lib/iptv-login'
 import { TRIAL_DEVICES } from '@/lib/devices'
+import { getSavedRef } from '@/lib/referral'
 
 interface Props {
   open: boolean
   busy?: boolean
   error?: string
-  onSubmit: (data: { device: string; iptvUsername: string; iptvPassword: string }) => void
+  onSubmit: (data: { device: string; iptvUsername: string; iptvPassword: string; referralUsername?: string }) => void
   onClose: () => void
 }
 
@@ -24,6 +25,8 @@ export default function TrialIntake({ open, busy, error, onSubmit, onClose }: Pr
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [localError, setLocalError] = useState('')
+  const [referral, setReferral] = useState('')
+  useEffect(() => { setReferral(getSavedRef()) }, [])
 
   useEffect(() => {
     if (!open) return
@@ -43,7 +46,7 @@ export default function TrialIntake({ open, busy, error, onSubmit, onClose }: Pr
       return
     }
     setLocalError('')
-    onSubmit({ device, iptvUsername: uname, iptvPassword: password.trim() })
+    onSubmit({ device, iptvUsername: uname, iptvPassword: password.trim(), referralUsername: referral.trim() || undefined })
   }
 
   const shownError = localError || error
@@ -118,6 +121,12 @@ export default function TrialIntake({ open, busy, error, onSubmit, onClose }: Pr
                 onClick={() => setShowPassword((v) => !v)}>{showPassword ? 'Hide' : 'Show'}</button>
             </div>
             <p className="field-hint">{PASSWORD_RULE}. You can always see it on your account page.</p>
+
+            <label htmlFor="trial-referral" className="field-label mt-4" style={{ fontSize: 13 }}>Referral username <span className="text-muted font-normal">(optional)</span></label>
+            <input id="trial-referral" type="text" value={referral} onChange={(e) => setReferral(e.target.value)}
+              autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} maxLength={64}
+              placeholder="Your friend’s WKTV username" />
+            <p className="field-hint">Referred by a WKTV customer? Enter their username exactly as they spell it, capital letters included.</p>
 
             <p className="text-sm text-muted mt-4">Your trial includes 2 connections, so you can share it with a friend or family member.</p>
 
