@@ -137,6 +137,28 @@ export async function POST(request: NextRequest) {
       requestedPassword = pword
     }
 
+    // Free trial referral: must match an existing customer's TV username exactly (capital letters count)
+    let referrer: { userId: string; username: string } | null = null
+    const referralInput = typeof body?.referralUsername === 'string' ? body.referralUsername.trim() : ''
+    if (isFreeTrial && referralInput) {
+      const notFound = NextResponse.json(
+        { error: 'We couldn’t find that referral username. Check the spelling (capital letters count) or leave it blank.', field: 'referral' },
+        { status: 400 }
+      )
+      if (referralInput.length > 64) return notFound
+      const { data: refLine } = await adminSupabase
+        .from('user_subscriptions')
+        .select('user_id, iptv_username')
+        .eq('iptv_username', referralInput)
+        .limit(1)
+      const match = refLine && refLine[0]
+      if (!match || match.iptv_username !== referralInput) return notFound
+      if (match.user_id === user.id || referralInput === requestedUsername) {
+        return NextResponse.json({ error: 'You can’t use your own username as the referral.', field: 'referral' }, { status: 400 })
+      }
+      referrer = { userId: match.user_id, username: match.iptv_username }
+    }
+
     const amountCents = plan.price * 100
     const userName = user.name || user.email?.split('@')[0] || 'Unknown'
     const userPhone = user.phone || null
@@ -152,7 +174,9 @@ export async function POST(request: NextRequest) {
       amount_cents: amountCents,
       payment_method: isFreeTrial ? 'trial' : method,
       cashapp_name: isFreeTrial ? null : cashAppName,
-      notes: isTrialDevice(body?.device) ? `Device: ${body.device}` : null,
+      notes: [isTrialDevice(body?.device) ? `Device: ${body.device}` : '', referrer ? `Referred by: ${referrer.username}` : '']
+        .filter(Boolean)
+        .join(' · ') || null,
       status: 'pending',
     }
     let { data: signup, error: signupError } = await adminSupabase
@@ -169,6 +193,16 @@ export async function POST(request: NextRequest) {
     if (signupError) {
       console.error('Failed to create pending signup:', signupError)
       return NextResponse.json({ error: 'Could not submit your request. Please try again.' }, { status: 500 })
+    }
+
+    // Remember who referred this customer (first referral only)
+    if (referrer) {
+      const { error: refError } = await adminSupabase
+        .from('users')
+        .update({ referred_by: referrer.username, referred_by_user_id: referrer.userId })
+        .eq('id', user.id)
+        .is('referred_by', null)
+      if (refError) console.error('Could not save referral (run the 2026-10-26 referrals migration?):', refError)
     }
 
     if (!isFreeTrial) {
@@ -193,6 +227,7 @@ export async function POST(request: NextRequest) {
         (isFreeTrial ? '' : `\n${methodLabel}: ${cashAppName}\nNote code: ${paymentNoteCode(plan)}`) +
         (requestedUsername ? `\nWants username: ${requestedUsername}` : '') +
         (isTrialDevice(body?.device) ? `\nDevice: ${body.device}` : '') +
+        (referrer ? `\nReferred by: ${referrer.username}` : '') +
         (userPhone ? `\nPhone: ${userPhone}` : '')
     )
 

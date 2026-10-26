@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { referralLink } from '@/lib/referral'
 
 interface User {
   id: string
@@ -29,7 +30,7 @@ export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null)
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [copied, setCopied] = useState<'user' | 'pass' | null>(null)
+  const [copied, setCopied] = useState<'user' | 'pass' | 'ref' | null>(null)
   const [showPass, setShowPass] = useState(false)
   const [linkOpen, setLinkOpen] = useState(false)
   const [linkUser, setLinkUser] = useState('')
@@ -60,7 +61,7 @@ export default function DashboardPage() {
       setLinkBusy(false)
     }
   }
-  const copy = (text: string, which: 'user' | 'pass') => {
+  const copy = (text: string, which: 'user' | 'pass' | 'ref') => {
     navigator.clipboard?.writeText(text).then(() => { setCopied(which); setTimeout(() => setCopied(null), 1500) }).catch(() => {})
   }
 
@@ -237,6 +238,24 @@ export default function DashboardPage() {
           </a>
         </div>
       </div>
+
+      {hasPlan && subscription?.username && (
+        <div className="card mt-6">
+          <span className="eyebrow">Refer a friend</span>
+          <h2 className="text-2xl mt-2 mb-2">Give a free trial, get a free month</h2>
+          <p className="text-muted mb-4">
+            Send this link to a friend for a free 24-hour trial. If they buy a 1-year plan, we’ll add <b>1 free month</b> to your plan.
+            Your friend can also type your username, <b style={{ overflowWrap: "anywhere" }}>{subscription.username}</b>, in the referral box when they start their trial.
+          </p>
+          <div className="tile flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm font-bold break-all" style={{ minWidth: 0, flex: '1 1 220px' }}>{referralLink(subscription.username)}</p>
+            <button type="button" className="btn-secondary" onClick={() => copy(referralLink(subscription.username || ''), 'ref')}>
+              {copied === 'ref' ? 'Copied ✓' : 'Copy link'}
+            </button>
+          </div>
+          <p className="text-sm text-muted mt-3">The username has to be spelled exactly right, capital letters included, for the referral to count.</p>
+        </div>
+      )}
     </div>
   )
 }
