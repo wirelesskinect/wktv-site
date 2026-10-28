@@ -27,6 +27,8 @@ const nextConfig = {
         { source: '/', destination: '/home.html' },
         { source: '/troubleshooting', destination: '/troubleshooting.html' },
         { source: '/help', destination: '/support.html' },
+        // Client website intake form (standalone page, no login needed)
+        { source: '/website', destination: '/website-intake/index.html' },
       ],
     };
   },
