@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import SalesDashboard from '@/components/SalesDashboard'
 import ReferralsPanel from '@/components/ReferralsPanel'
+import ResellerInquiriesPanel from './ResellerInquiriesPanel'
 import { PLAN_LIST, getPlan, paymentNoteCode, PAYMENT_METHOD_LABELS } from '@/lib/plans'
 
 interface PendingSignup {
@@ -338,6 +339,9 @@ export default function AdminPage() {
         {/* Referrals: free month for the referrer when their friend buys a 1-year plan */}
         <ReferralsSection />
 
+        {/* Reseller inquiries from the homepage form */}
+        <ResellerInquiriesSection />
+
         {/* All website accounts */}
         <details open className="tile mb-8" style={{ padding: '16px 20px' }}>
           <summary className="cursor-pointer">
@@ -596,6 +600,19 @@ function ReferralsSection() {
         <span className="text-sm text-gray-400">: {due ? `${due} free month${due > 1 ? 's' : ''} to give` : 'friends who started a trial with a referral username'}</span>
       </summary>
       <div className="mt-4"><ReferralsPanel onDueCount={setDue} /></div>
+    </details>
+  )
+}
+
+function ResellerInquiriesSection() {
+  const [newCount, setNewCount] = useState(0)
+  return (
+    <details open className="tile mb-8" style={{ padding: '16px 20px' }}>
+      <summary className="cursor-pointer">
+        <strong>Reseller inquiries</strong>{' '}
+        <span className="text-sm text-gray-400">: {newCount ? `${newCount} new` : 'people who asked to become a reseller'}</span>
+      </summary>
+      <div className="mt-4"><ResellerInquiriesPanel onNewCount={setNewCount} /></div>
     </details>
   )
 }
