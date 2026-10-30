@@ -7,6 +7,7 @@ import { siteConfig } from '@/config/site'
 import { getPlan, connectionUpgrades, paymentNoteCode, PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/plans'
 import ConnectionWarning from '@/components/ConnectionWarning'
 import TrialIntake from '@/components/TrialIntake'
+import { US_STATES } from '@/lib/shipping'
 import { USERNAME_RULE, PASSWORD_RULE, normalizeUsername, usernameError, passwordError } from '@/lib/iptv-login'
 
 
@@ -36,6 +37,10 @@ function PaymentContent() {
   const [iptvPassword, setIptvPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [trialOpen, setTrialOpen] = useState(false)
+  // Box bundles: where to ship the box
+  const [ship, setShip] = useState({ name: '', street: '', unit: '', city: '', state: '', zip: '' })
+  const setShipField = (field: keyof typeof ship) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setShip((s) => ({ ...s, [field]: e.target.value }))
 
   useEffect(() => {
     checkAuth()
@@ -74,7 +79,7 @@ function PaymentContent() {
     }
   }
 
-  async function submitRequest(body: Record<string, string>) {
+  async function submitRequest(body: Record<string, unknown>) {
     setLoading(true)
     setError('')
     try {
@@ -113,13 +118,29 @@ function PaymentContent() {
     if (!plan) return
     const login = loginFields()
     if (!login) return
+    if (plan.ships) {
+      if (!ship.name.trim() || !ship.street.trim() || !ship.city.trim() || !ship.state) {
+        setError('Please fill in your shipping address so we can send your box.')
+        return
+      }
+      if (!/^\d{5}(-\d{4})?$/.test(ship.zip.trim())) {
+        setError('Please enter a valid 5-digit ZIP code.')
+        return
+      }
+    }
     if (!cashAppName.trim()) {
       setError(`Please enter the name you paid from on ${PAYMENT_METHOD_LABELS[payMethod]}`)
       return
     }
 
-    // Only the plan, login choice and Cash App name are sent; the server sets the price
-    await submitRequest({ planId: plan.id, paymentMethod: payMethod, cashAppName: cashAppName.trim(), ...login })
+    // Only the plan, login choice, shipping address and Cash App name are sent; the server sets the price
+    await submitRequest({
+      planId: plan.id,
+      paymentMethod: payMethod,
+      cashAppName: cashAppName.trim(),
+      ...login,
+      ...(plan.ships ? { shipping: ship } : {}),
+    })
   }
 
   async function handleTrial(e: React.FormEvent) {
@@ -153,6 +174,38 @@ function PaymentContent() {
     </div>
   ) : null
 
+  const shippingBlock = plan?.ships ? (
+    <div className="mb-6">
+      <p className="field-label">Where should we ship your box?</p>
+      <p className="field-hint" style={{ marginTop: 0, marginBottom: 12 }}>
+        Your {plan.device} box arrives with WKTV already installed. US addresses only. Shipping is included.
+      </p>
+      <label htmlFor="ship-name" className="field-label" style={{ fontSize: 13 }}>Full name</label>
+      <input id="ship-name" type="text" value={ship.name} onChange={setShipField('name')} autoComplete="shipping name" maxLength={80} required />
+      <label htmlFor="ship-street" className="field-label mt-4" style={{ fontSize: 13 }}>Street address</label>
+      <input id="ship-street" type="text" value={ship.street} onChange={setShipField('street')} autoComplete="shipping address-line1" maxLength={120} placeholder="123 Main St" required />
+      <label htmlFor="ship-unit" className="field-label mt-4" style={{ fontSize: 13 }}>Apt, suite, unit <span className="text-muted" style={{ fontWeight: 400 }}>(optional)</span></label>
+      <input id="ship-unit" type="text" value={ship.unit} onChange={setShipField('unit')} autoComplete="shipping address-line2" maxLength={40} />
+      <div className="grid gap-3 mt-4" style={{ gridTemplateColumns: 'minmax(0,2fr) minmax(0,1fr) minmax(0,1.2fr)' }}>
+        <div>
+          <label htmlFor="ship-city" className="field-label" style={{ fontSize: 13 }}>City</label>
+          <input id="ship-city" type="text" value={ship.city} onChange={setShipField('city')} autoComplete="shipping address-level2" maxLength={60} required />
+        </div>
+        <div>
+          <label htmlFor="ship-state" className="field-label" style={{ fontSize: 13 }}>State</label>
+          <select id="ship-state" value={ship.state} onChange={setShipField('state')} autoComplete="shipping address-level1" required>
+            <option value="">—</option>
+            {US_STATES.map((st) => <option key={st} value={st}>{st}</option>)}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="ship-zip" className="field-label" style={{ fontSize: 13 }}>ZIP</label>
+          <input id="ship-zip" type="text" inputMode="numeric" value={ship.zip} onChange={setShipField('zip')} autoComplete="shipping postal-code" maxLength={10} required />
+        </div>
+      </div>
+    </div>
+  ) : null
+
   if (checkingAuth || !plan) {
     return (
       <div className="flex items-center justify-center py-32"><div className="spinner" /></div>
@@ -182,7 +235,9 @@ function PaymentContent() {
           <p className="page-sub mb-6">
             {plan.price === 0
               ? 'We’ll activate your free trial shortly. Your account page will show it as active once it’s ready.'
-              : 'We’ll verify your payment and activate your plan within a few hours. Your account page will show it as active once it’s ready.'}
+              : plan.ships
+                ? `We’ll verify your payment, set up your ${plan.device} box with WKTV and ship it to you. Your login will be on your account page once your plan is active.`
+                : 'We’ll verify your payment and activate your plan within a few hours. Your account page will show it as active once it’s ready.'}
           </p>
           <div className="flex flex-col gap-3">
             <Link href="/dashboard" className="btn-primary w-full">Go to my account →</Link>
@@ -253,7 +308,8 @@ function PaymentContent() {
             <div>
               <p className="text-xs uppercase tracking-widest text-muted mb-1">Your plan</p>
               <p className="text-lg font-bold">{plan.name}</p>
-              <p className="text-sm text-muted">{plan.connections} connection{plan.connections > 1 ? 's' : ''} · {plan.duration}</p>
+              <p className="text-sm text-muted">{plan.connections} connection{plan.connections > 1 ? 's' : ''} · {plan.duration}{plan.ships ? ' of service' : ''}</p>
+              {plan.ships && <p className="text-sm text-muted">📦 {plan.device} box · WKTV pre-installed · shipping included</p>}
             </div>
             <div className="text-right">
               <p className="text-xs uppercase tracking-widest text-muted mb-1">Total</p>
@@ -302,7 +358,10 @@ function PaymentContent() {
               </div>
               <p className="text-xs text-muted mt-2">
                 Disclaimer: put <b>only {noteCode}</b> in the note. Please don’t write anything else, like the plan or service name.
-                (Codes: A = annual, M = 1 month, L = lifetime; the number is how many connections. Example: A2 = annual, 2 connections.)
+                {' '}
+                {plan.kind === 'bundle'
+                  ? '(Box codes: PLUS or PRO = which box; the number is months of service. Example: PLUS12 = ONN 4K Plus with 1 year.)'
+                  : '(Codes: A = annual, M = 1 month, L = lifetime; the number is how many connections. Example: A2 = annual, 2 connections.)'}
               </p>
             </div>
 
@@ -330,6 +389,7 @@ function PaymentContent() {
 
         {/* Step 2: Confirm */}
         <form onSubmit={handleSubmit}>
+          {shippingBlock}
           {loginBlock}
           <label htmlFor="cashapp" className="field-label"><span className="text-red">03</span>&nbsp; {payMethod === 'cashapp' ? 'Your Cash App name or $Cashtag' : payMethod === 'zelle' ? 'Name on your Zelle account' : 'Your Venmo name or @username'}</label>
           <input id="cashapp" type="text" value={cashAppName} onChange={(e) => setCashAppName(e.target.value)}

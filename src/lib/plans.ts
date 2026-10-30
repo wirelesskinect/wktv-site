@@ -2,7 +2,7 @@
 // The server uses this list to decide what a customer is charged,
 // so prices can't be changed from the browser.
 
-export type PlanKind = 'trial' | 'monthly' | 'annual' | 'lifetime'
+export type PlanKind = 'trial' | 'monthly' | 'annual' | 'lifetime' | 'bundle'
 
 export interface Plan {
   id: string
@@ -12,6 +12,9 @@ export interface Plan {
   duration: string
   kind: PlanKind
   badge?: string
+  months?: number // length of service in months (used for bundles)
+  device?: string // streaming box included with a bundle
+  ships?: boolean // true = we ship a box, so checkout asks for a shipping address
 }
 
 export const PLAN_LIST: Plan[] = [
@@ -25,12 +28,19 @@ export const PLAN_LIST: Plan[] = [
   { id: 'annual-5', name: '5 Connections Annual', price: 300, connections: 5, duration: '1 year', kind: 'annual', badge: 'Best Value' },
   { id: 'lifetime-1', name: 'Lifetime 1 Connection', price: 600, connections: 1, duration: 'lifetime', kind: 'lifetime' },
   { id: 'lifetime-5', name: 'Lifetime 5 Connections', price: 850, connections: 5, duration: 'lifetime', kind: 'lifetime', badge: 'Best Lifetime Value' },
+  // Streaming box with WKTV pre-installed + service, shipped to the customer
+  { id: 'box-plus-2mo', name: 'ONN 4K Plus Box + 2 Months', price: 165, connections: 1, duration: '2 months', kind: 'bundle', months: 2, device: 'ONN 4K Plus', ships: true },
+  { id: 'box-plus-1yr', name: 'ONN 4K Plus Box + 1 Year', price: 250, connections: 1, duration: '1 year', kind: 'bundle', months: 12, device: 'ONN 4K Plus', ships: true, badge: 'Best Value' },
+  { id: 'box-pro-2mo', name: 'ONN 4K Pro Box + 2 Months', price: 200, connections: 1, duration: '2 months', kind: 'bundle', months: 2, device: 'ONN 4K Pro', ships: true },
+  { id: 'box-pro-1yr', name: 'ONN 4K Pro Box + 1 Year', price: 285, connections: 1, duration: '1 year', kind: 'bundle', months: 12, device: 'ONN 4K Pro', ships: true, badge: 'Best Value' },
 ]
 
 // Short code customers type in the payment note (Cash App / Zelle / Venmo), so payments
 // can be matched without naming the service: A = annual, M = 1 month, L = lifetime,
 // followed by the number of connections. Example: A2 = annual, 2 connections.
+// Box bundles: PLUS2 / PLUS12 / PRO2 / PRO12 = which box + months of service.
 export function paymentNoteCode(plan: Plan): string {
+  if (plan.kind === 'bundle') return `${/pro/i.test(plan.device || '') ? 'PRO' : 'PLUS'}${plan.months || 1}`
   const letter = plan.kind === 'annual' ? 'A' : plan.kind === 'lifetime' ? 'L' : 'M'
   return `${letter}${plan.connections}`
 }
@@ -44,6 +54,17 @@ export const PLANS: Record<string, Plan> = Object.fromEntries(PLAN_LIST.map((p) 
 export function getPlan(id: unknown): Plan | null {
   return typeof id === 'string' && Object.prototype.hasOwnProperty.call(PLANS, id) ? PLANS[id] : null
 }
+
+// How many months of service a plan adds (lifetime = 1200)
+export function planMonths(plan: Plan): number {
+  if (plan.kind === 'lifetime') return 1200
+  if (plan.months) return plan.months
+  if (plan.kind === 'annual' || plan.duration === '1 year') return 12
+  return 1
+}
+
+// Box bundles (box + service, shipped)
+export const BUNDLE_PLANS: Plan[] = PLAN_LIST.filter((p) => p.kind === 'bundle')
 
 // Plans an existing customer can buy or renew from their account.
 export const RENEWABLE_PLANS: Plan[] = PLAN_LIST.filter((p) => p.kind !== 'trial')

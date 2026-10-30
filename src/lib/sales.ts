@@ -15,9 +15,9 @@ export function historicSale(plan: Plan, expiresAt: Date | null, now = new Date(
   if (expiresAt && plan.kind === 'annual') {
     date = new Date(expiresAt)
     date.setFullYear(date.getFullYear() - 1)
-  } else if (expiresAt && (plan.kind === 'monthly' || plan.kind === 'trial')) {
+  } else if (expiresAt && (plan.kind === 'monthly' || plan.kind === 'trial' || plan.kind === 'bundle')) {
     date = new Date(expiresAt)
-    date.setMonth(date.getMonth() - ((plan as Plan & { months?: number }).months || 1))
+    date.setMonth(date.getMonth() - (plan.months || 1))
   }
   if (date > now) date = new Date(now)
 

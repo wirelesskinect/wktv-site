@@ -5,7 +5,10 @@ import { getPlan } from '@/lib/plans'
 
 export const dynamic = 'force-dynamic'
 
-const isYearPlan = (planId: string | null | undefined) => getPlan(planId)?.kind === 'annual'
+const isYearPlan = (planId: string | null | undefined) => {
+  const plan = getPlan(planId)
+  return plan?.kind === 'annual' || (plan?.kind === 'bundle' && plan.months === 12)
+}
 
 // The 1-year plan a referred customer bought (approved order or completed payment), if any
 async function boughtYearPlan(userIds: string[]) {
