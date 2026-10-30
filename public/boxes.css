@@ -22,3 +22,9 @@
 #chosen-ship{color:#ffb4b4}
 @media(max-width:950px){.boxes{grid-template-columns:1fr;padding:28px}}
 @media(max-width:650px){.boxes{padding:22px;border-radius:18px;margin-top:18px}.boxes h3{font-size:28px}.box-cards{grid-template-columns:1fr}.box-card{padding:20px}}
+.box-screens{display:flex;flex-direction:column;gap:8px}
+.box-screens span{font-size:13px;font-weight:700;color:#e8e8ee}
+.box-screens div{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.box-screens button{font:800 15px Manrope,Arial,sans-serif;color:#fff;background:#ffffff0b;border:1px solid #ffffff30;border-radius:8px;padding:9px 0;cursor:pointer;transition:background .2s,border-color .2s}
+.box-screens button:hover{border-color:#e62932}
+.box-screens button[aria-pressed=true]{background:#e62932;border-color:#e62932}
