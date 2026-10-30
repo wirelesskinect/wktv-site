@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { siteConfig } from '@/config/site'
-import { getPlan, connectionUpgrades, paymentNoteCode, PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/plans'
+import { getPlan, connectionUpgrades, bundleVariants, BOX_EXTRA_CONNECTION_PRICES, paymentNoteCode, PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/plans'
 import ConnectionWarning from '@/components/ConnectionWarning'
 import TrialIntake from '@/components/TrialIntake'
 import { US_STATES } from '@/lib/shipping'
@@ -316,6 +316,23 @@ function PaymentContent() {
               <p className="text-3xl font-extrabold" style={{ fontFamily: 'var(--font-display)' }}>${plan.price}</p>
             </div>
           </div>
+          {plan.kind === 'bundle' && (
+            <div className="mt-4">
+              <p className="text-xs uppercase tracking-widest text-muted mb-2">How many screens at the same time?</p>
+              <div className="grid grid-cols-5 gap-2" role="group" aria-label="Connections">
+                {bundleVariants(plan).map((v) => (
+                  <button key={v.id} type="button" aria-pressed={v.id === plan.id}
+                    onClick={() => router.replace(`/pay?plan=${v.id}&confirmed=1`)}
+                    className={`tile text-center font-bold ${v.id === plan.id ? 'is-active' : ''}`}
+                    style={{ padding: '8px 4px', borderColor: v.id === plan.id ? '#e62932' : undefined }}>
+                    {v.connections}
+                    <span className="block text-xs text-muted" style={{ fontWeight: 500 }}>${v.price}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted mt-2">1 connection included. 2nd connection +${BOX_EXTRA_CONNECTION_PRICES[1]}, 3rd–5th +${BOX_EXTRA_CONNECTION_PRICES[2]} each.</p>
+            </div>
+          )}
           <div className="mt-3 text-sm">
             <Link href="/renew" className="link">Change plan</Link>
           </div>
@@ -360,7 +377,7 @@ function PaymentContent() {
                 Disclaimer: put <b>only {noteCode}</b> in the note. Please don’t write anything else, like the plan or service name.
                 {' '}
                 {plan.kind === 'bundle'
-                  ? '(Box codes: PLUS or PRO = which box; the number is months of service. Example: PLUS12 = ONN 4K Plus with 1 year.)'
+                  ? '(Box codes: PLUS or PRO = which box, then months of service, then C + connections if more than 1. Example: PLUS12C3 = ONN 4K Plus, 1 year, 3 connections.)'
                   : '(Codes: A = annual, M = 1 month, L = lifetime; the number is how many connections. Example: A2 = annual, 2 connections.)'}
               </p>
             </div>
