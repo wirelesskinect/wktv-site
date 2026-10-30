@@ -10,6 +10,7 @@ function planLabel(p: Plan) {
   if (p.kind === 'trial') return `${p.name} — ${p.price === 0 ? 'FREE' : `$${p.price}`}`
   if (p.kind === 'monthly') return `Monthly · 1 connection — $${p.price}/month`
   if (p.kind === 'annual') return `Annual · ${p.connections} connection${p.connections > 1 ? 's' : ''} — $${p.price}/year${p.badge ? ` (${p.badge})` : ''}`
+  if (p.kind === 'bundle') return `${p.device} box + ${p.duration} of service — $${p.price} shipped`
   return `Lifetime · ${p.connections} connection${p.connections > 1 ? 's' : ''} — $${p.price} one-time`
 }
 
@@ -72,6 +73,7 @@ function SignupContent() {
     { label: 'Monthly', kind: 'monthly' },
     { label: 'Annual', kind: 'annual' },
     { label: 'Lifetime (one-time payment)', kind: 'lifetime' },
+    { label: 'Streaming box + service (shipped)', kind: 'bundle' },
   ]
 
   return (
