@@ -10,7 +10,9 @@ function planLabel(p: Plan) {
   if (p.kind === 'trial') return `${p.name} — ${p.price === 0 ? 'FREE' : `$${p.price}`}`
   if (p.kind === 'monthly') return `Monthly · 1 connection — $${p.price}/month`
   if (p.kind === 'annual') return `Annual · ${p.connections} connection${p.connections > 1 ? 's' : ''} — $${p.price}/year${p.badge ? ` (${p.badge})` : ''}`
-  if (p.kind === 'bundle') return `${p.device} box + ${p.duration} of service${p.connections > 1 ? ` · ${p.connections} connections` : ''} — $${p.price} shipped`
+  if (p.kind === 'bundle') return p.setupFee !== undefined
+    ? `${p.device} box ($${p.setupFee} setup) + ${p.months === 12 ? `Annual · ${p.connections} connection${p.connections > 1 ? 's' : ''}` : 'Monthly'} — $${p.price} today`
+    : `${p.name} — $${p.price}`
   return `Lifetime · ${p.connections} connection${p.connections > 1 ? 's' : ''} — $${p.price} one-time`
 }
 
@@ -73,7 +75,7 @@ function SignupContent() {
     { label: 'Monthly', kind: 'monthly' },
     { label: 'Annual', kind: 'annual' },
     { label: 'Lifetime (one-time payment)', kind: 'lifetime' },
-    { label: 'Streaming box + service (shipped)', kind: 'bundle' },
+    { label: 'Streaming box + plan (annual options at checkout)', kind: 'bundle' },
   ]
 
   return (
@@ -94,7 +96,7 @@ function SignupContent() {
               <option value="">Create my account now, pick a plan later</option>
               {groups.map((g) => (
                 <optgroup key={g.kind} label={g.label}>
-                  {SIGNUP_PLAN_OPTIONS.filter((p) => p.kind === g.kind && (p.kind !== 'bundle' || p.connections === 1 || p.id === planId)).map((p) => (
+                  {SIGNUP_PLAN_OPTIONS.filter((p) => p.kind === g.kind && (p.kind !== 'bundle' || p.months === 1 || p.id === planId)).map((p) => (
                     <option key={p.id} value={p.id}>{planLabel(p)}</option>
                   ))}
                 </optgroup>
