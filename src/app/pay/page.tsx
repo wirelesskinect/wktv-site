@@ -364,7 +364,7 @@ function PaymentContent() {
                 Disclaimer: put <b>only {noteCode}</b> in the note. Please don’t write anything else, like the plan or service name.
                 {' '}
                 {plan.kind === 'bundle'
-                  ? '(Box codes: PLUS or PRO = which box, then M = monthly or A + connections for annual. Example: PROA2 = ONN 4K Pro, annual, 2 connections.)'
+                  ? '(Box codes: PLUS or PRO = which box, then M = monthly, A + connections for annual, or L + connections for lifetime. Example: PROA2 = ONN 4K Pro, annual, 2 connections.)'
                   : '(Codes: A = annual, M = 1 month, L = lifetime; the number is how many connections. Example: A2 = annual, 2 connections.)'}
               </p>
             </div>
