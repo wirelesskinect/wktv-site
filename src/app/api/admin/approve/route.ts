@@ -184,8 +184,8 @@ export async function POST(request: NextRequest) {
     const renamed = mode === 'created' && signup.requested_username && signup.requested_username !== username
     const boxNote = isBox
       ? mode === 'created'
-        ? ` 24-hour line created for setup. Before shipping the ${plan.device} box, add ${plan.duration} of service to this line on your panel.`
-        : ` Box order: add ${plan.duration} of service to this customer's line on your panel before shipping the ${plan.device} box.`
+        ? ` 24-hour line created for setup. Before shipping the ${plan.device} box, add ${plan.duration} of service with ${plan.connections} connection${plan.connections > 1 ? 's' : ''} to this line on your panel.`
+        : ` Box order: add ${plan.duration} of service with ${plan.connections} connection${plan.connections > 1 ? 's' : ''} to this customer's line on your panel before shipping the ${plan.device} box.`
       : ''
     const message = isBox ? `Box order approved (${username}).${boxNote}${renamed ? ` "${signup.requested_username}" was taken on the panel, so it was created as "${username}".` : ''}` :
       renamed ? `New line created on the IPTV panel. "${signup.requested_username}" was already taken there, so it was created as "${username}" (shown on the customer's account page).` :
