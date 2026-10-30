@@ -5,6 +5,7 @@ import { insertPayment } from '@/lib/sales'
 import { getPlan, paymentNoteCode, PAYMENT_METHODS, PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/plans'
 import { normalizeUsername, usernameError, passwordError } from '@/lib/iptv-login'
 import { isTrialDevice } from '@/lib/devices'
+import { US_STATES } from '@/lib/shipping'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,6 +46,25 @@ async function sendPushover(title: string, message: string) {
   }
 }
 
+const SHIP_STATES = new Set(US_STATES)
+
+// Shipping address for box bundles. Returns the one-line address, or an error message.
+function readShipping(raw: any): { line: string } | { error: string } {
+  const clean = (v: unknown, max: number) => (typeof v === 'string' ? v.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max) : '')
+  const name = clean(raw?.name, 80)
+  const street = clean(raw?.street, 120)
+  const unit = clean(raw?.unit, 40)
+  const city = clean(raw?.city, 60)
+  const state = clean(raw?.state, 2).toUpperCase()
+  const zip = clean(raw?.zip, 10)
+  if (!name) return { error: 'Please enter the name to ship your box to.' }
+  if (!street) return { error: 'Please enter your street address.' }
+  if (!city) return { error: 'Please enter your city.' }
+  if (!SHIP_STATES.has(state)) return { error: 'Please choose your state.' }
+  if (!/^\d{5}(-\d{4})?$/.test(zip)) return { error: 'Please enter a valid 5-digit ZIP code.' }
+  return { line: `${name}, ${street}${unit ? ` ${unit}` : ''}, ${city}, ${state} ${zip}` }
+}
+
 // Creates a plan request: a Cash App payment for paid plans, or a free-trial request.
 // Only the plan ID and Cash App name are taken from the browser. The price, plan name,
 // and renewal status are all decided here on the server.
@@ -74,6 +94,16 @@ export async function POST(request: NextRequest) {
       if (cashAppName.length > 60) {
         return NextResponse.json({ error: 'That name is too long.' }, { status: 400 })
       }
+    }
+
+    // Box bundles ship to the customer, so they need a shipping address
+    let shipTo: string | null = null
+    if (plan.ships) {
+      const shipping = readShipping(body?.shipping)
+      if ('error' in shipping) {
+        return NextResponse.json({ error: shipping.error, field: 'shipping' }, { status: 400 })
+      }
+      shipTo = shipping.line
     }
 
     // Free trial: one per account
@@ -174,7 +204,7 @@ export async function POST(request: NextRequest) {
       amount_cents: amountCents,
       payment_method: isFreeTrial ? 'trial' : method,
       cashapp_name: isFreeTrial ? null : cashAppName,
-      notes: [isTrialDevice(body?.device) ? `Device: ${body.device}` : '', referrer ? `Referred by: ${referrer.username}` : '']
+      notes: [shipTo ? `Ship to: ${shipTo} · Box: ${plan.device}` : '', isTrialDevice(body?.device) ? `Device: ${body.device}` : '', referrer ? `Referred by: ${referrer.username}` : '']
         .filter(Boolean)
         .join(' · ') || null,
       status: 'pending',
@@ -222,9 +252,10 @@ export async function POST(request: NextRequest) {
     await sendPushover(
       isFreeTrial
         ? '🎁 WKTV Free Trial Request'
-        : `💰 WKTV ${isRenewal ? 'Renewal' : 'Payment'} - $${plan.price} via ${methodLabel}`,
+        : `${shipTo ? '📦 WKTV Box Order' : `💰 WKTV ${isRenewal ? 'Renewal' : 'Payment'}`} - $${plan.price} via ${methodLabel}`,
       `Plan: ${plan.name}\nCustomer: ${userName}\nEmail: ${userEmail}` +
         (isFreeTrial ? '' : `\n${methodLabel}: ${cashAppName}\nNote code: ${paymentNoteCode(plan)}`) +
+        (shipTo ? `\nShip ${plan.device} to: ${shipTo}` : '') +
         (requestedUsername ? `\nWants username: ${requestedUsername}` : '') +
         (isTrialDevice(body?.device) ? `\nDevice: ${body.device}` : '') +
         (referrer ? `\nReferred by: ${referrer.username}` : '') +
