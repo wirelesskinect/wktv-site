@@ -64,7 +64,7 @@ export default function RenewPage() {
     { title: 'Monthly', note: 'No contract', plans: PLAN_LIST.filter((p) => p.kind === 'monthly') },
     { title: 'Annual', note: 'Best value per month', plans: PLAN_LIST.filter((p) => p.kind === 'annual') },
     { title: 'Lifetime', note: 'One-time payment', plans: PLAN_LIST.filter((p) => p.kind === 'lifetime') },
-    { title: 'Streaming box + service', note: 'WKTV pre-installed · shipped', plans: PLAN_LIST.filter((p) => p.kind === 'bundle' && p.connections === 1) },
+    { title: 'Streaming box', note: 'WKTV pre-installed · shipped', plans: PLAN_LIST.filter((p) => p.kind === 'bundle' && p.months === 1) },
   ]
 
   return (
@@ -111,7 +111,7 @@ export default function RenewPage() {
                       <p className="font-bold text-white">
                         {plan.kind === 'trial' ? plan.name : plan.kind === 'bundle' ? `${plan.device} box` : `${plan.connections} connection${plan.connections > 1 ? 's' : ''}`}
                       </p>
-                      <p className="text-sm text-muted">{plan.kind === 'trial' ? `${plan.connections} connection` : plan.kind === 'bundle' ? `${plan.duration} of service · shipped · more screens at checkout` : plan.kind === 'lifetime' ? 'Lifetime access' : plan.kind === 'monthly' ? 'Billed monthly' : 'Billed yearly'}</p>
+                      <p className="text-sm text-muted">{plan.kind === 'trial' ? `${plan.connections} connection` : plan.kind === 'bundle' ? `$${plan.setupFee} setup + monthly · annual options at checkout` : plan.kind === 'lifetime' ? 'Lifetime access' : plan.kind === 'monthly' ? 'Billed monthly' : 'Billed yearly'}</p>
                     </div>
                     <p className="text-2xl font-extrabold" style={{ fontFamily: 'var(--font-display)' }}>
                       {plan.price === 0 ? 'Free' : `$${plan.price}`}
