@@ -11,7 +11,7 @@ function planLabel(p: Plan) {
   if (p.kind === 'monthly') return `Monthly · 1 connection — $${p.price}/month`
   if (p.kind === 'annual') return `Annual · ${p.connections} connection${p.connections > 1 ? 's' : ''} — $${p.price}/year${p.badge ? ` (${p.badge})` : ''}`
   if (p.kind === 'bundle') return p.setupFee !== undefined
-    ? `${p.device} box ($${p.setupFee} setup) + ${p.months === 12 ? `Annual · ${p.connections} connection${p.connections > 1 ? 's' : ''}` : 'Monthly'} — $${p.price} today`
+    ? `${p.device} box ($${p.setupFee} setup) + ${p.months === 1200 ? `Lifetime · ${p.connections} connection${p.connections > 1 ? 's' : ''} ($${p.discount} off)` : p.months === 12 ? `Annual · ${p.connections} connection${p.connections > 1 ? 's' : ''}` : 'Monthly'} — $${p.price} today`
     : `${p.name} — $${p.price}`
   return `Lifetime · ${p.connections} connection${p.connections > 1 ? 's' : ''} — $${p.price} one-time`
 }
