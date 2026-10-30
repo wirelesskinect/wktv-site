@@ -4,9 +4,10 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { siteConfig } from '@/config/site'
-import { getPlan, connectionUpgrades, bundleVariants, BOX_EXTRA_CONNECTION_PRICES, paymentNoteCode, PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/plans'
+import { getPlan, connectionUpgrades, paymentNoteCode, PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/plans'
 import ConnectionWarning from '@/components/ConnectionWarning'
 import TrialIntake from '@/components/TrialIntake'
+import BoxPlanPicker from '@/components/BoxPlanPicker'
 import { US_STATES } from '@/lib/shipping'
 import { USERNAME_RULE, PASSWORD_RULE, normalizeUsername, usernameError, passwordError } from '@/lib/iptv-login'
 
@@ -178,7 +179,7 @@ function PaymentContent() {
     <div className="mb-6">
       <p className="field-label">Where should we ship your box?</p>
       <p className="field-hint" style={{ marginTop: 0, marginBottom: 12 }}>
-        Your {plan.device} box arrives with WKTV already installed. US addresses only. Shipping is included.
+        Your {plan.device} box arrives with WKTV already installed. US addresses only.
       </p>
       <label htmlFor="ship-name" className="field-label" style={{ fontSize: 13 }}>Full name</label>
       <input id="ship-name" type="text" value={ship.name} onChange={setShipField('name')} autoComplete="shipping name" maxLength={80} required />
@@ -309,29 +310,15 @@ function PaymentContent() {
               <p className="text-xs uppercase tracking-widest text-muted mb-1">Your plan</p>
               <p className="text-lg font-bold">{plan.name}</p>
               <p className="text-sm text-muted">{plan.connections} connection{plan.connections > 1 ? 's' : ''} · {plan.duration}{plan.ships ? ' of service' : ''}</p>
-              {plan.ships && <p className="text-sm text-muted">📦 {plan.device} box · WKTV pre-installed · shipping included</p>}
+              {plan.ships && <p className="text-sm text-muted">📦 {plan.device} box · WKTV pre-installed · shipped to you</p>}
             </div>
             <div className="text-right">
               <p className="text-xs uppercase tracking-widest text-muted mb-1">Total</p>
               <p className="text-3xl font-extrabold" style={{ fontFamily: 'var(--font-display)' }}>${plan.price}</p>
             </div>
           </div>
-          {plan.kind === 'bundle' && (
-            <div className="mt-4">
-              <p className="text-xs uppercase tracking-widest text-muted mb-2">How many screens at the same time?</p>
-              <div className="grid grid-cols-5 gap-2" role="group" aria-label="Connections">
-                {bundleVariants(plan).map((v) => (
-                  <button key={v.id} type="button" aria-pressed={v.id === plan.id}
-                    onClick={() => router.replace(`/pay?plan=${v.id}&confirmed=1`)}
-                    className={`tile text-center font-bold ${v.id === plan.id ? 'is-active' : ''}`}
-                    style={{ padding: '8px 4px', borderColor: v.id === plan.id ? '#e62932' : undefined }}>
-                    {v.connections}
-                    <span className="block text-xs text-muted" style={{ fontWeight: 500 }}>${v.price}</span>
-                  </button>
-                ))}
-              </div>
-              <p className="text-xs text-muted mt-2">1 connection included. 2nd connection +${BOX_EXTRA_CONNECTION_PRICES[1]}, 3rd–5th +${BOX_EXTRA_CONNECTION_PRICES[2]} each.</p>
-            </div>
+          {plan.kind === 'bundle' && plan.setupFee !== undefined && (
+            <BoxPlanPicker plan={plan} onChange={(id) => router.replace(`/pay?plan=${id}&confirmed=1`)} />
           )}
           <div className="mt-3 text-sm">
             <Link href="/renew" className="link">Change plan</Link>
@@ -377,7 +364,7 @@ function PaymentContent() {
                 Disclaimer: put <b>only {noteCode}</b> in the note. Please don’t write anything else, like the plan or service name.
                 {' '}
                 {plan.kind === 'bundle'
-                  ? '(Box codes: PLUS or PRO = which box, then months of service, then C + connections if more than 1. Example: PLUS12C3 = ONN 4K Plus, 1 year, 3 connections.)'
+                  ? '(Box codes: PLUS or PRO = which box, then M = monthly or A + connections for annual. Example: PROA2 = ONN 4K Pro, annual, 2 connections.)'
                   : '(Codes: A = annual, M = 1 month, L = lifetime; the number is how many connections. Example: A2 = annual, 2 connections.)'}
               </p>
             </div>
