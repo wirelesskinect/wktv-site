@@ -525,6 +525,9 @@ export default function AdminPage() {
                       {(signup.notes?.startsWith('Device:') || signup.notes?.startsWith('Referred by:')) && (
                         <div className="text-sm text-gray-400">{signup.notes}</div>
                       )}
+                      {signup.notes?.startsWith('Ship to:') && (
+                        <div className="text-sm mt-1 rounded-lg px-2 py-1" style={{ background: 'rgba(230,41,50,.12)', border: '1px solid rgba(230,41,50,.4)', color: '#fecaca' }}>📦 {signup.notes}</div>
+                      )}
                       {signup.requested_username && (
                         <div className="text-sm text-gray-400">Wants login: <b>{signup.requested_username}</b></div>
                       )}
