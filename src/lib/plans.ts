@@ -4,18 +4,13 @@
 
 export type PlanKind = 'trial' | 'monthly' | 'annual' | 'lifetime' | 'bundle'
 
-// Box bundle prices with 1 connection (shipping included)
-export const BOX_BASE_PRICES: Record<string, number> = {
-  'plus-2mo': 165,
-  'plus-1yr': 250,
-  'pro-2mo': 200,
-  'pro-1yr': 285,
-}
-// Extra connections on a box bundle: 2nd +$50, 3rd/4th/5th +$25 each
-export const BOX_EXTRA_CONNECTION_PRICES = [0, 50, 25, 25, 25]
-export function boxExtraConnectionsPrice(connections: number): number {
-  return BOX_EXTRA_CONNECTION_PRICES.slice(0, Math.max(1, Math.min(5, connections))).reduce((a, b) => a + b, 0)
-}
+// Streaming boxes: one-time setup & activation fee (box with WKTV pre-installed),
+// plus a rate plan the customer picks: Monthly (1 connection) or Annual (1–5 connections).
+export const BOXES = [
+  { key: 'plus', device: 'ONN 4K Plus', setupFee: 100 },
+  { key: 'pro', device: 'ONN 4K Pro', setupFee: 150 },
+] as const
+export type BoxKey = (typeof BOXES)[number]['key']
 
 export interface Plan {
   id: string
@@ -28,6 +23,9 @@ export interface Plan {
   months?: number // length of service in months (used for bundles)
   device?: string // streaming box included with a bundle
   ships?: boolean // true = we ship a box, so checkout asks for a shipping address
+  setupFee?: number // one-time box setup & activation fee included in price (bundles)
+  servicePlanId?: string // the rate plan included with a box bundle (monthly-1, annual-N)
+  boxKey?: BoxKey
 }
 
 export const PLAN_LIST: Plan[] = [
@@ -41,50 +39,63 @@ export const PLAN_LIST: Plan[] = [
   { id: 'annual-5', name: '5 Connections Annual', price: 300, connections: 5, duration: '1 year', kind: 'annual', badge: 'Best Value' },
   { id: 'lifetime-1', name: 'Lifetime 1 Connection', price: 600, connections: 1, duration: 'lifetime', kind: 'lifetime' },
   { id: 'lifetime-5', name: 'Lifetime 5 Connections', price: 850, connections: 5, duration: 'lifetime', kind: 'lifetime', badge: 'Best Lifetime Value' },
-  ...boxBundles(),
 ]
+PLAN_LIST.push(...boxBundles(PLAN_LIST))
 
-// Streaming box with WKTV pre-installed + service, shipped to the customer.
-// Each box comes with 1 connection; extra connections cost BOX_EXTRA_CONNECTION_PRICES.
-// IDs: box-plus-2mo (1 connection), box-plus-2mo-c2 … box-plus-2mo-c5
-function boxBundles(): Plan[] {
-  const boxes = [
-    { key: 'plus', device: 'ONN 4K Plus' },
-    { key: 'pro', device: 'ONN 4K Pro' },
-  ]
-  const terms = [
-    { key: '2mo', label: '2 Months', duration: '2 months', months: 2 },
-    { key: '1yr', label: '1 Year', duration: '1 year', months: 12 },
-  ]
+// Box bundles = setup & activation fee + the chosen rate plan.
+// IDs: box-plus-monthly, box-plus-annual-1 … box-plus-annual-5 (same for pro)
+function boxBundles(service: Plan[]): Plan[] {
+  const ratePlans = service.filter((p) => p.id === 'monthly-1' || p.kind === 'annual')
   const plans: Plan[] = []
-  for (const box of boxes) {
-    for (const term of terms) {
-      const base = BOX_BASE_PRICES[`${box.key}-${term.key}`]
-      for (let c = 1; c <= 5; c++) {
-        plans.push({
-          id: `box-${box.key}-${term.key}${c > 1 ? `-c${c}` : ''}`,
-          name: `${box.device} Box + ${term.label}${c > 1 ? ` · ${c} Connections` : ''}`,
-          price: base + boxExtraConnectionsPrice(c),
-          connections: c,
-          duration: term.duration,
-          kind: 'bundle',
-          months: term.months,
-          device: box.device,
-          ships: true,
-          ...(term.months === 12 ? { badge: 'Best Value' } : {}),
-        })
-      }
+  for (const box of BOXES) {
+    for (const rate of ratePlans) {
+      const monthly = rate.kind === 'monthly'
+      plans.push({
+        id: `box-${box.key}-${monthly ? 'monthly' : `annual-${rate.connections}`}`,
+        name: `${box.device} Box + ${monthly ? 'Monthly' : `Annual · ${rate.connections} Connection${rate.connections > 1 ? 's' : ''}`}`,
+        price: box.setupFee + rate.price,
+        connections: rate.connections,
+        duration: rate.duration,
+        kind: 'bundle',
+        months: monthly ? 1 : 12,
+        device: box.device,
+        ships: true,
+        setupFee: box.setupFee,
+        servicePlanId: rate.id,
+        boxKey: box.key,
+      })
     }
   }
   return plans
 }
 
+// Retired box offers (Oct 2026). Kept only so orders placed with them can still be approved.
+const RETIRED_PLANS: Plan[] = (() => {
+  const base: Record<string, number> = { 'plus-2mo': 165, 'plus-1yr': 250, 'pro-2mo': 200, 'pro-1yr': 285 }
+  const extra = [0, 50, 75, 100, 125]
+  const out: Plan[] = []
+  for (const [key, price] of Object.entries(base)) {
+    const [box, term] = key.split('-')
+    const device = box === 'pro' ? 'ONN 4K Pro' : 'ONN 4K Plus'
+    const months = term === '1yr' ? 12 : 2
+    for (let c = 1; c <= 5; c++) {
+      out.push({
+        id: `box-${key}${c > 1 ? `-c${c}` : ''}`,
+        name: `${device} Box + ${months === 12 ? '1 Year' : '2 Months'}${c > 1 ? ` · ${c} Connections` : ''}`,
+        price: price + extra[c - 1], connections: c, duration: months === 12 ? '1 year' : '2 months',
+        kind: 'bundle', months, device, ships: true,
+      })
+    }
+  }
+  return out
+})()
+
 // Short code customers type in the payment note (Cash App / Zelle / Venmo), so payments
 // can be matched without naming the service: A = annual, M = 1 month, L = lifetime,
 // followed by the number of connections. Example: A2 = annual, 2 connections.
-// Box bundles: PLUS2 / PLUS12 / PRO2 / PRO12 = which box + months of service.
+// Box orders: PLUS or PRO + M (monthly) or A + connections. Example: PROA2 = Pro box, annual, 2 connections.
 export function paymentNoteCode(plan: Plan): string {
-  if (plan.kind === 'bundle') return `${/pro/i.test(plan.device || '') ? 'PRO' : 'PLUS'}${plan.months || 1}${plan.connections > 1 ? `C${plan.connections}` : ''}`
+  if (plan.kind === 'bundle') return `${/pro/i.test(plan.device || '') ? 'PRO' : 'PLUS'}${plan.months === 12 ? `A${plan.connections}` : plan.months === 1 ? 'M' : `${plan.months}C${plan.connections}`}`
   const letter = plan.kind === 'annual' ? 'A' : plan.kind === 'lifetime' ? 'L' : 'M'
   return `${letter}${plan.connections}`
 }
@@ -93,7 +104,7 @@ export const PAYMENT_METHODS = ['cashapp', 'zelle', 'venmo'] as const
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number]
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = { cashapp: 'Cash App', zelle: 'Zelle', venmo: 'Venmo' }
 
-export const PLANS: Record<string, Plan> = Object.fromEntries(PLAN_LIST.map((p) => [p.id, p]))
+export const PLANS: Record<string, Plan> = Object.fromEntries([...RETIRED_PLANS, ...PLAN_LIST].map((p) => [p.id, p]))
 
 export function getPlan(id: unknown): Plan | null {
   return typeof id === 'string' && Object.prototype.hasOwnProperty.call(PLANS, id) ? PLANS[id] : null
@@ -110,11 +121,9 @@ export function planMonths(plan: Plan): number {
 // Box bundles (box + service, shipped)
 export const BUNDLE_PLANS: Plan[] = PLAN_LIST.filter((p) => p.kind === 'bundle')
 
-// The same box + service length with a different number of connections (1–5)
-export function bundleVariants(plan: Plan | null): Plan[] {
-  if (!plan || plan.kind !== 'bundle') return []
-  const base = plan.id.replace(/-c\d$/, '')
-  return BUNDLE_PLANS.filter((p) => p.id.replace(/-c\d$/, '') === base).sort((a, b) => a.connections - b.connections)
+// Box bundle for a box + rate plan ('monthly' or annual connections 1–5)
+export function boxPlan(boxKey: string | undefined, rate: 'monthly' | number): Plan | null {
+  return getPlan(`box-${boxKey}-${rate === 'monthly' ? 'monthly' : `annual-${rate}`}`)
 }
 
 // Plans an existing customer can buy or renew from their account.
