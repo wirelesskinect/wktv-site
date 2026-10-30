@@ -103,8 +103,12 @@ export async function listPackages(trial: boolean): Promise<PanelPackage[]> {
 export function packageIdForPlan(planId: string): string | null {
   try {
     const map = JSON.parse(process.env.NXT_PACKAGE_MAP || '{}')
-    const id = map?.[planId]
-    return id === undefined || id === null || id === '' ? null : String(id)
+    const pick = (key: string) => {
+      const id = map?.[key]
+      return id === undefined || id === null || id === '' ? null : String(id)
+    }
+    // A 1-year box bundle uses the 1-connection annual package unless it has its own entry
+    return pick(planId) ?? (/^box-.*-1yr$/.test(planId) ? pick('annual-1') : null)
   } catch {
     return null
   }
