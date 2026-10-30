@@ -59,6 +59,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Unknown plan "${signup.plan_id}"` }, { status: 400 })
     }
     const isFreeTrial = plan.price === 0
+    // Box bundles: start with a 24-hour line so the box can be set up and tested.
+    // The 2 months / 1 year of service is added by hand on the panel right before shipping.
+    const isBox = plan.kind === 'bundle'
 
     const { data: existing } = await adminSupabase
       .from('user_subscriptions')
@@ -72,18 +75,25 @@ export async function POST(request: NextRequest) {
     let panelLineId: string | null = null
     let mode: 'created' | 'extended' | 'manual'
 
-    if (nxtConfigured()) {
-      const packageId = packageIdForPlan(plan.id)
+    if (nxtConfigured() && isBox && existing?.iptv_username && existing?.iptv_password) {
+      // Customer already has a line: leave it alone, the service is added by hand on the panel
+      username = existing.iptv_username
+      password = existing.iptv_password
+      expiresAt = existing.expires_at ? new Date(existing.expires_at) : null
+      mode = 'manual'
+    } else if (nxtConfigured()) {
+      const packageKey = isBox ? 'trial-free' : plan.id
+      const packageId = packageIdForPlan(packageKey)
       if (!packageId) {
         await release()
         return NextResponse.json(
-          { error: `No panel package is set for "${plan.name}". Add "${plan.id}" to NXT_PACKAGE_MAP in Vercel, then approve again.` },
+          { error: `No panel package is set for "${isBox ? 'Free 24-Hour Trial (used for box orders)' : plan.name}". Add "${packageKey}" to NXT_PACKAGE_MAP in Vercel, then approve again.` },
           { status: 400 }
         )
       }
 
       // Renewal: extend the customer's existing line instead of making a new one
-      const line = !isFreeTrial && existing?.iptv_username && existing?.iptv_password
+      const line = !isFreeTrial && !isBox && existing?.iptv_username && existing?.iptv_password
         ? await findLine(existing.iptv_username, existing.iptv_password)
         : null
 
@@ -107,7 +117,7 @@ export async function POST(request: NextRequest) {
         for (let attempt = 0; attempt < 4 && !created; attempt++) {
           const tryName = attempt === 0 ? wanted : `${wanted.slice(0, 14)}${randomInt(10, 100)}`
           try {
-            created = await createLine({ packageId, trial: isFreeTrial, username: tryName, password: wantedPassword, description })
+            created = await createLine({ packageId, trial: isFreeTrial || isBox, username: tryName, password: wantedPassword, description })
           } catch (err) {
             const taken = err instanceof NxtError && /taken|exist|already/i.test(err.message)
             if (!taken || attempt === 3) throw err
@@ -172,7 +182,12 @@ export async function POST(request: NextRequest) {
       .eq('status', 'pending')
 
     const renamed = mode === 'created' && signup.requested_username && signup.requested_username !== username
-    const message =
+    const boxNote = isBox
+      ? mode === 'created'
+        ? ` 24-hour line created for setup. Before shipping the ${plan.device} box, add ${plan.duration} of service to this line on your panel.`
+        : ` Box order: add ${plan.duration} of service to this customer's line on your panel before shipping the ${plan.device} box.`
+      : ''
+    const message = isBox ? `Box order approved (${username}).${boxNote}${renamed ? ` "${signup.requested_username}" was taken on the panel, so it was created as "${username}".` : ''}` :
       renamed ? `New line created on the IPTV panel. "${signup.requested_username}" was already taken there, so it was created as "${username}" (shown on the customer's account page).` :
       mode === 'created' ? 'New line created on the IPTV panel.' :
       mode === 'extended' ? 'Existing line extended on the IPTV panel.' :
