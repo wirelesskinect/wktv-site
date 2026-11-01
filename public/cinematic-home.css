@@ -103,3 +103,16 @@
 @keyframes wk-offer-pulse{0%{box-shadow:0 0 0 0 #ffffffaa}70%{box-shadow:0 0 0 10px #ffffff00}100%{box-shadow:0 0 0 0 #ffffff00}}
 @media(max-width:650px){.direction-b .offer{font-size:9px;line-height:1.6;padding:9px 12px}.direction-b .offer a{display:inline-flex;margin:6px 0 0;font-size:12px;padding:6px 14px}}
 @media(prefers-reduced-motion:reduce){.direction-b .offer,.direction-b .offer::after,.direction-b .offer a{animation:none}}
+/* Compatible devices strip */
+.direction-b .device-compat{flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:12px 30px;padding-block:26px;min-height:0}
+.direction-b .device-compat>span{width:100%;max-width:none;text-align:center;font-size:11px}
+.direction-b .device-compat a.dev{display:flex;flex-direction:column;align-items:center;text-align:center;font-size:inherit;color:inherit;padding:8px 12px;border-radius:14px;transition:background .2s}
+.direction-b .device-compat a.dev:hover,.direction-b .device-compat a.dev:focus-visible{background:#ffffff0d}
+.direction-b .device-compat a.dev:hover b{color:var(--red)}
+.direction-b .device-compat a.dev small{margin-top:5px;font-size:11px;line-height:1.45;letter-spacing:.02em;color:#8f8f99}
+.direction-b .device-compat a.dev small em{display:block;font-style:normal;font-size:10px;color:#6f6f79}
+.direction-b .device-compat a.find{display:inline-flex;align-self:center;font-size:13px;color:#d3d3d8;border:1px solid #ffffff26;border-radius:999px;padding:8px 15px;transition:border-color .2s,color .2s}
+.direction-b .device-compat a.find:hover{border-color:var(--red);color:#fff}
+.direction-b .device-compat .dev-note{width:100%;margin:4px 0 0;text-align:center;font-size:12px;line-height:1.6;color:#a1a1aa}
+.direction-b .device-compat .dev-note strong{color:#ff6b6b}
+@media(max-width:650px){.direction-b .device-compat{gap:8px 10px;padding-block:22px}.direction-b .device-compat a.dev{flex:0 0 calc(50% - 10px)}.direction-b .device-compat a.find{display:inline-flex;font-size:12px}.direction-b .device-compat .dev-note{font-size:11px;padding-inline:6px}}
