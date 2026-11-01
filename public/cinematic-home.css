@@ -115,4 +115,20 @@
 .direction-b .device-compat a.find:hover{border-color:var(--red);color:#fff}
 .direction-b .device-compat .dev-note{width:100%;margin:4px 0 0;text-align:center;font-size:12px;line-height:1.6;color:#a1a1aa}
 .direction-b .device-compat .dev-note strong{color:#ff6b6b}
-@media(max-width:650px){.direction-b .device-compat{gap:8px 10px;padding-block:22px}.direction-b .device-compat a.dev{flex:0 0 calc(50% - 10px)}.direction-b .device-compat a.find{display:inline-flex;font-size:12px}.direction-b .device-compat .dev-note{font-size:11px;padding-inline:6px}}
+@media(max-width:650px){
+.direction-b .device-compat{display:flex;flex-direction:column;align-items:stretch;gap:0;padding-block:26px 28px}
+.direction-b .device-compat>span{font-size:10px;letter-spacing:.16em;margin-bottom:14px}
+.direction-b .device-compat a.dev{display:grid;grid-template-columns:auto 1fr 14px;align-items:center;gap:14px;text-align:left;padding:15px 4px;border-radius:0;border-top:1px solid #ffffff12}
+.direction-b .device-compat a.dev:last-of-type{border-bottom:1px solid #ffffff12}
+.direction-b .device-compat a.dev::after{content:"›";color:#ee302f;font-size:20px;line-height:1;text-align:right}
+.direction-b .device-compat a.dev b{font-size:19px;white-space:nowrap}
+.direction-b .device-compat a.dev small{margin:0;text-align:right;font-size:12px;line-height:1.4;color:#a1a1aa}
+.direction-b .device-compat a.dev small em{font-size:10.5px;margin-top:2px}
+.direction-b .device-compat a.find{display:flex;justify-content:center;align-self:stretch;margin-top:18px;padding:12px 16px;font-size:14px}
+.direction-b .device-compat .dev-note{margin-top:16px;font-size:12.5px;line-height:1.6;padding-inline:4px}
+.direction-b .device-compat .dev-note strong{display:block;font-size:13px;margin-bottom:2px}
+}
+/* Headline: Live Sports. TV. Shows & Movies. */
+.direction-b .cinematic-hero h1{max-width:900px}
+.direction-b .cinematic-hero .lead b{color:#fff}
+@media(max-width:760px){.direction-b .cinematic-hero h1{font-size:clamp(42px,12.5vw,72px)}}
