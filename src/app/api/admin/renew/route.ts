@@ -7,7 +7,7 @@ import { insertPayment } from '@/lib/sales'
 
 export const dynamic = 'force-dynamic'
 
-const PAID_WITH = ['cashapp', 'zelle', 'venmo', 'cash', 'other'] as const
+const PAID_WITH = ['cashapp', 'zelle', 'venmo', 'applepay', 'cash', 'other'] as const
 
 // Expiry used only when the IPTV panel isn't connected (manual mode)
 function addPlanTime(plan: Plan, from: Date): Date {

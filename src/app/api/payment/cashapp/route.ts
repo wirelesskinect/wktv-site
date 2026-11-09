@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
     }
 
     const isFreeTrial = plan.price === 0
-    // How they paid (Cash App, Zelle or Venmo) and the name/handle they paid from
+    // How they paid (Cash App, Zelle, Venmo or Apple Pay) and the name/handle they paid from
     const method: PaymentMethod = PAYMENT_METHODS.includes(body?.paymentMethod) ? body.paymentMethod : 'cashapp'
     const methodLabel = PAYMENT_METHOD_LABELS[method]
     const cashAppName = typeof body?.cashAppName === 'string' ? body.cashAppName.trim() : ''

@@ -10,6 +10,7 @@ export const siteConfig = {
   cashAppTag: '$wirelesskinect',
   zellePhone: '484.680.3570',
   venmoHandle: '@wirelesskinectsnax',
+  applePayPhone: '484.680.3570',
   cryptoWallets: {
     btc: '', // Add BTC address
     usdt: '', // Add USDT address (TRC20 or ERC20)

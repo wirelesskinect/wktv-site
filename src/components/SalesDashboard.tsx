@@ -10,7 +10,7 @@ const SIGNUPS = '#ee302f'
 const money = (cents: number) => `$${Math.round(cents / 100).toLocaleString('en-US')}`
 const monthLabel = (m: string, long = false) =>
   new Date(`${m}-15T00:00:00Z`).toLocaleDateString('en-US', { month: long ? 'long' : 'short', year: long ? 'numeric' : '2-digit', timeZone: 'UTC' })
-const methodLabel: Record<string, string> = { cashapp: 'Cash App', zelle: 'Zelle', venmo: 'Venmo', cash: 'Cash', other: 'Other', backfill: 'Historic', trial: 'Trial' }
+const methodLabel: Record<string, string> = { cashapp: 'Cash App', zelle: 'Zelle', venmo: 'Venmo', applepay: 'Apple Pay', cash: 'Cash', other: 'Other', backfill: 'Historic', trial: 'Trial' }
 
 type Month = { month: string; real: number; historic: number; signups: number; sales: number }
 

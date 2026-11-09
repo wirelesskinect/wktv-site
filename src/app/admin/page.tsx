@@ -252,7 +252,7 @@ export default function AdminPage() {
         <div>
           <span className="eyebrow">Admin</span>
           <h1 className="page-title">Orders &amp; activations</h1>
-          <p className="page-sub">Confirm the payment (Cash App, Zelle or Venmo) and its note code before approving. Free trials have no payment.</p>
+          <p className="page-sub">Confirm the payment (Cash App, Zelle, Venmo or Apple Pay) and its note code before approving. Free trials have no payment.</p>
         </div>
         <button onClick={() => fetchPendingSignups()} className="btn-secondary">↻ Refresh</button>
       </div>
@@ -419,6 +419,7 @@ export default function AdminPage() {
                             <option value="cashapp">Cash App</option>
                             <option value="zelle">Zelle</option>
                             <option value="venmo">Venmo</option>
+                            <option value="applepay">Apple Pay</option>
                             <option value="cash">Cash</option>
                             <option value="other">Other</option>
                           </select>

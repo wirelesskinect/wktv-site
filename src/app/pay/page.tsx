@@ -222,9 +222,13 @@ function PaymentContent() {
     cashapp: { color: '#4ade80', bg: 'linear-gradient(140deg, rgba(0,214,50,.12), rgba(0,0,0,.25))', border: 'rgba(0,214,50,.35)' },
     zelle: { color: '#c4b5fd', bg: 'linear-gradient(140deg, rgba(109,30,212,.16), rgba(0,0,0,.25))', border: 'rgba(139,92,246,.45)' },
     venmo: { color: '#7dd3fc', bg: 'linear-gradient(140deg, rgba(0,140,255,.14), rgba(0,0,0,.25))', border: 'rgba(56,189,248,.45)' },
+    applepay: { color: '#f5f5f7', bg: 'linear-gradient(140deg, rgba(255,255,255,.10), rgba(0,0,0,.25))', border: 'rgba(255,255,255,.40)' },
   }
   const ms = methodStyle[payMethod]
-  const payTo = payMethod === 'cashapp' ? cashTag : payMethod === 'zelle' ? siteConfig.zellePhone : siteConfig.venmoHandle
+  const payTo = payMethod === 'cashapp' ? cashTag : payMethod === 'zelle' ? siteConfig.zellePhone : payMethod === 'applepay' ? siteConfig.applePayPhone : siteConfig.venmoHandle
+  const payToIsPhone = payMethod === 'zelle' || payMethod === 'applepay'
+  const applePayDigits = siteConfig.applePayPhone.replace(/\D/g, '')
+  const applePayLink = `sms:+1${applePayDigits}&body=${encodeURIComponent(noteCode)}`
 
   if (success) {
     return (
@@ -299,7 +303,7 @@ function PaymentContent() {
       <div className="text-center mb-7">
         <span className="eyebrow">Checkout</span>
         <h1 className="page-title">Complete your payment</h1>
-        <p className="page-sub">Pay with Cash App, Zelle or Venmo, then confirm below.</p>
+        <p className="page-sub">Pay with Cash App, Zelle, Venmo or Apple Pay, then confirm below.</p>
       </div>
 
       <div className="card">
@@ -328,8 +332,8 @@ function PaymentContent() {
         {/* Step 1: choose how to pay, then send */}
         <div className="mb-6">
           <p className="field-label"><span className="text-red">01</span>&nbsp; Choose how you’ll pay</p>
-          <div className="grid grid-cols-3 gap-2 mb-4" role="tablist" aria-label="Payment method">
-            {(['cashapp', 'zelle', 'venmo'] as PaymentMethod[]).map((m) => (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4" role="tablist" aria-label="Payment method">
+            {(['cashapp', 'zelle', 'venmo', 'applepay'] as PaymentMethod[]).map((m) => (
               <button key={m} type="button" role="tab" aria-selected={payMethod === m}
                 onClick={() => setPayMethod(m)}
                 className={`tile text-center font-bold ${payMethod === m ? 'is-active' : ''}`}
@@ -341,11 +345,11 @@ function PaymentContent() {
 
           <p className="field-label"><span className="text-red">02</span>&nbsp; Send ${plan.price} with {PAYMENT_METHOD_LABELS[payMethod]}</p>
           <div className="rounded-2xl p-5" style={{ background: ms.bg, border: `1px solid ${ms.border}` }}>
-            <p className="text-xs uppercase tracking-widest text-muted mb-1">{payMethod === 'zelle' ? 'Zelle to this phone number' : 'Send to'}</p>
+            <p className="text-xs uppercase tracking-widest text-muted mb-1">{payMethod === 'zelle' ? 'Zelle to this phone number' : payMethod === 'applepay' ? 'Apple Pay (Apple Cash) to this phone number' : 'Send to'}</p>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <span className="text-3xl font-extrabold break-all" style={{ fontFamily: 'var(--font-display)', color: ms.color }}>{payTo}</span>
               <button type="button" className="btn-secondary" style={{ minHeight: 40, padding: '8px 14px', fontSize: 13 }}
-                onClick={() => copyText(payMethod === 'zelle' ? payTo.replace(/\D/g, '') : payTo, 'to')}>
+                onClick={() => copyText(payToIsPhone ? payTo.replace(/\D/g, '') : payTo, 'to')}>
                 {copied === 'to' ? 'Copied ✓' : 'Copy'}
               </button>
             </div>
@@ -380,6 +384,14 @@ function PaymentContent() {
             {payMethod === 'zelle' && (
               <p className="text-sm text-muted mt-4">Open your bank’s app → Zelle → Send → enter <b>{siteConfig.zellePhone}</b> → ${plan.price} → memo <b>{noteCode}</b>.</p>
             )}
+            {payMethod === 'applepay' && (
+              <>
+                <a href={applePayLink} className="btn-primary w-full mt-4" style={{ background: 'linear-gradient(135deg,#3a3a3c,#000)', border: '1px solid rgba(255,255,255,.35)', boxShadow: '0 10px 30px rgba(0,0,0,.35)' }}>
+                  Open Messages · ${plan.price} ↗
+                </a>
+                <p className="text-xs text-muted mt-3">On your iPhone: Messages → text <b>{siteConfig.applePayPhone}</b> → tap ＋ → Apple Cash → ${plan.price} → Send, and type <b>{noteCode}</b> as the message. You can also use Wallet → Apple Cash → Send.</p>
+              </>
+            )}
             {payMethod === 'venmo' && (
               <>
                 <a href={venmoLink} target="_blank" rel="noopener noreferrer" className="btn-primary w-full mt-4" style={{ background: 'linear-gradient(135deg,#3d95ce,#008cff)', boxShadow: '0 10px 30px rgba(0,140,255,.2)' }}>
@@ -395,9 +407,9 @@ function PaymentContent() {
         <form onSubmit={handleSubmit}>
           {shippingBlock}
           {loginBlock}
-          <label htmlFor="cashapp" className="field-label"><span className="text-red">03</span>&nbsp; {payMethod === 'cashapp' ? 'Your Cash App name or $Cashtag' : payMethod === 'zelle' ? 'Name on your Zelle account' : 'Your Venmo name or @username'}</label>
+          <label htmlFor="cashapp" className="field-label"><span className="text-red">03</span>&nbsp; {payMethod === 'cashapp' ? 'Your Cash App name or $Cashtag' : payMethod === 'zelle' ? 'Name on your Zelle account' : payMethod === 'applepay' ? 'Your name or the iPhone number you paid from' : 'Your Venmo name or @username'}</label>
           <input id="cashapp" type="text" value={cashAppName} onChange={(e) => setCashAppName(e.target.value)}
-            placeholder={payMethod === 'cashapp' ? '$yourcashtag or display name' : payMethod === 'zelle' ? 'First and last name' : '@yourvenmo or display name'} maxLength={60} required />
+            placeholder={payMethod === 'cashapp' ? '$yourcashtag or display name' : payMethod === 'zelle' ? 'First and last name' : payMethod === 'applepay' ? 'Name or phone number' : '@yourvenmo or display name'} maxLength={60} required />
           <p className="field-hint">So we can match your payment.</p>
           {error && <div className="alert alert-error mt-4">{error}</div>}
           <button type="submit" disabled={loading} className="btn-primary w-full mt-5">
