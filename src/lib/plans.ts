@@ -111,9 +111,9 @@ export function paymentNoteCode(plan: Plan): string {
   return `${letter}${plan.connections}`
 }
 
-export const PAYMENT_METHODS = ['cashapp', 'zelle', 'venmo'] as const
+export const PAYMENT_METHODS = ['cashapp', 'zelle', 'venmo', 'applepay'] as const
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number]
-export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = { cashapp: 'Cash App', zelle: 'Zelle', venmo: 'Venmo' }
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = { cashapp: 'Cash App', zelle: 'Zelle', venmo: 'Venmo', applepay: 'Apple Pay' }
 
 export const PLANS: Record<string, Plan> = Object.fromEntries([...RETIRED_PLANS, ...PLAN_LIST].map((p) => [p.id, p]))
 
