@@ -74,7 +74,7 @@ export default function RenewPage() {
         <div className="mt-4">
           <span className="eyebrow">{isExisting ? 'Renew or upgrade' : 'Choose a plan'}</span>
           <h1 className="page-title">{isExisting ? 'Keep the good stuff streaming' : 'Pick the plan that fits you'}</h1>
-          <p className="page-sub">Pay with Cash App, Zelle or Venmo. We activate your plan once payment is confirmed.</p>
+          <p className="page-sub">Pay with Cash App, Zelle, Venmo or Apple Pay. We activate your plan once payment is confirmed.</p>
         </div>
       </div>
 
