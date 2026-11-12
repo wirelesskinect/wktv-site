@@ -233,6 +233,7 @@ export default function AdminPage() {
         const exp = data.expiresAt ? `\nExpires: ${new Date(data.expiresAt).toLocaleString()}` : ''
         alert(`Approved. ${data.message || ''}${creds}${exp}`)
         fetchPendingSignups()
+        loadAccounts()
       }
     } catch (err) {
       alert('Failed to approve')
@@ -287,7 +288,7 @@ export default function AdminPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <a href="#approvals" className="btn-primary">↓ Pending approvals ({pendingSignups.filter(s => s.status === 'pending').length})</a>
-          <button onClick={() => fetchPendingSignups()} className="btn-secondary">↻ Refresh</button>
+          <button onClick={() => { fetchPendingSignups(); loadAccounts() }} className="btn-secondary">↻ Refresh</button>
         </div>
       </div>
       <div>
@@ -413,9 +414,19 @@ export default function AdminPage() {
                         {a.expiresAt && <span className="text-gray-400"> · expires {new Date(a.expiresAt).toLocaleDateString('en-US')}</span>}
                       </>
                     ) : <span className="text-gray-500">No plan</span>}
-                    {a.orders > 0 && <div className="text-xs text-gray-500">{a.orders} order{a.orders > 1 ? 's' : ''}{a.pendingOrders ? `, ${a.pendingOrders} waiting` : ''}</div>}
+                    {a.orders > 0 && <div className="text-xs text-gray-500">{a.orders} order{a.orders > 1 ? 's' : ''}{a.pendingOrders ? <span className="text-yellow-400">, {a.pendingOrders} waiting for approval</span> : ''}</div>}
                   </div>
                   <div className="flex flex-wrap gap-2 items-center">
+                    {a.waitingOrder && (
+                      <button type="button" disabled={processing === a.waitingOrder.id}
+                        onClick={() => {
+                          const o = a.waitingOrder
+                          if (window.confirm(`Approve ${a.email}'s order: ${o.planName} · $${(o.amountCents / 100).toFixed(0)}?\n\nOnly approve once you've confirmed the payment arrived. This ${a.tvLogin ? 'extends their line' : 'creates their line'} on the IPTV panel.`)) approveSignup(o.id)
+                        }}
+                        className="bg-green-600 hover:bg-green-700 text-white rounded font-bold disabled:opacity-50" style={{ minHeight: 36, padding: '6px 12px', fontSize: 13 }}>
+                        {processing === a.waitingOrder.id ? 'Approving…' : `✓ Approve order · ${a.waitingOrder.planName} · $${(a.waitingOrder.amountCents / 100).toFixed(0)}`}
+                      </button>
+                    )}
                     {a.tvLogin && (
                       <button type="button" onClick={() => { setRenewFor(renewFor === a.id ? null : a.id); setFreeFor(null); setRenewMsg(null) }}
                         className="btn-primary" style={{ minHeight: 36, padding: '6px 12px', fontSize: 13 }}>
