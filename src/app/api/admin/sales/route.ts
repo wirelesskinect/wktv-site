@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAdminFromRequest } from '@/lib/auth'
 import { adminSupabase } from '@/lib/supabase-server'
 import { getPlan } from '@/lib/plans'
-import { recordHistoricSale } from '@/lib/sales'
+import { recordHistoricSale, isFreeMonth } from '@/lib/sales'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,7 +24,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Could not load sales data' }, { status: 500 })
   }
   const users = usersRes.data || []
-  const payments = paymentsRes.data || []
+  const allPayments = paymentsRes.data || []
+  // Free months are tracked separately and never count as sales or revenue
+  const payments = allPayments.filter((p) => !isFreeMonth(p))
+  const freeMonths = allPayments.filter(isFreeMonth)
   const orders = ordersRes.data || []
   const subs = subsRes.data || []
   const emailById = new Map(users.map((u) => [u.id, u.email]))
@@ -36,14 +39,16 @@ export async function GET(req: NextRequest) {
     return o?.plan_id || null
   }
 
+  const monthlyCents = (getPlan('monthly-1')?.price || 0) * 100
   const now = new Date()
   const thisMonth = monthKey(now)
-  const byMonth = new Map<string, { month: string; real: number; historic: number; signups: number; sales: number }>()
+  const byMonth = new Map<string, { month: string; real: number; historic: number; signups: number; sales: number; free: number }>()
   const bump = (m: string) => {
-    if (!byMonth.has(m)) byMonth.set(m, { month: m, real: 0, historic: 0, signups: 0, sales: 0 })
+    if (!byMonth.has(m)) byMonth.set(m, { month: m, real: 0, historic: 0, signups: 0, sales: 0, free: 0 })
     return byMonth.get(m)!
   }
   for (const u of users) bump(monthKey(u.created_at)).signups++
+  for (const f of freeMonths) bump(monthKey(f.created_at)).free++
 
   const byPlan = new Map<string, { planId: string; name: string; sales: number; cents: number; historicCents: number }>()
   let realCents = 0
@@ -65,12 +70,12 @@ export async function GET(req: NextRequest) {
 
   // Fill in empty months so the chart has no gaps (up to the last 24 months)
   const keys = Array.from(byMonth.keys()).sort()
-  const months: { month: string; real: number; historic: number; signups: number; sales: number }[] = []
+  const months: { month: string; real: number; historic: number; signups: number; sales: number; free: number }[] = []
   if (keys.length) {
     const start = new Date(`${keys[0]}-01T00:00:00Z`)
     const cursor = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1))
     while (monthKey(cursor) <= thisMonth) {
-      months.push(byMonth.get(monthKey(cursor)) || { month: monthKey(cursor), real: 0, historic: 0, signups: 0, sales: 0 })
+      months.push(byMonth.get(monthKey(cursor)) || { month: monthKey(cursor), real: 0, historic: 0, signups: 0, sales: 0, free: 0 })
       cursor.setUTCMonth(cursor.getUTCMonth() + 1)
     }
   }
@@ -94,9 +99,22 @@ export async function GET(req: NextRequest) {
       activeLines: activeSubs.length,
       activeConnections: activeSubs.reduce((n, s) => n + (s.connections || getPlan(s.plan_id)?.connections || 1), 0),
       backfillCandidates,
+      freeMonths: freeMonths.length,
+      freeReferral: freeMonths.filter((f) => f.payment_method === 'referral').length,
+      freeThisMonth: freeMonths.filter((f) => monthKey(f.created_at) === thisMonth).length,
+      // What the free months would have cost at today's monthly price
+      freeValueCents: freeMonths.length * monthlyCents,
     },
     months: months.slice(-24),
     plans: Array.from(byPlan.values()).sort((a, b) => b.cents - a.cents),
+    freeRecent: freeMonths.slice(0, 25).map((f) => ({
+      id: f.id,
+      date: f.created_at,
+      email: emailById.get(f.user_id) || '(deleted account)',
+      connections: Number(String(f.plan_id || '').replace('free-', '')) || 1,
+      reason: f.payment_method === 'referral' ? 'Referral' : 'Free',
+      note: String(f.payment_reference || '').replace(/^Free month( \(referral\))?:?\s*/, ''),
+    })),
     recent: payments.slice(0, 25).map((p) => ({
       id: p.id,
       date: p.created_at,
