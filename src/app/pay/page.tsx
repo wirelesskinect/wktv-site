@@ -29,6 +29,44 @@ function PaymentContent() {
   const [showWarning, setShowWarning] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
   const [payMethod, setPayMethod] = useState<PaymentMethod>('cashapp')
+  // Promo code (e.g. a link with ?promo=CODE fills it in). The server re-checks it when the order is placed.
+  const [promoInput, setPromoInput] = useState(searchParams.get('promo') || '')
+  const [promo, setPromo] = useState<{ code: string; label: string; discount: number; price: number } | null>(null)
+  const [promoError, setPromoError] = useState('')
+  const [promoBusy, setPromoBusy] = useState(false)
+  const [promoOpen, setPromoOpen] = useState(!!searchParams.get('promo'))
+
+  async function applyPromoCode(code: string, quiet = false) {
+    if (!plan || !code.trim()) return
+    setPromoBusy(true)
+    setPromoError('')
+    try {
+      const res = await fetch('/api/promo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planId: plan.id, code }),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        setPromo({ code: data.code, label: data.label, discount: data.discount, price: data.price })
+        setPromoInput(data.code)
+      } else {
+        setPromo(null)
+        if (!quiet || res.status !== 401) setPromoError(data.error || 'That promo code isn’t valid.')
+      }
+    } catch {
+      setPromoError('Couldn’t check that code. Please try again.')
+    } finally {
+      setPromoBusy(false)
+    }
+  }
+
+  // Re-check the code whenever the plan changes (e.g. switching connections)
+  useEffect(() => {
+    const code = promo?.code || promoInput
+    setPromo(null)
+    if (user && code.trim() && plan && plan.price > 0) applyPromoCode(code, true)
+  }, [planId, user]) // eslint-disable-line react-hooks/exhaustive-deps
   const copyText = (text: string, key: string) => {
     navigator.clipboard?.writeText(text).then(() => { setCopied(key); setTimeout(() => setCopied(null), 1500) }).catch(() => {})
   }
@@ -57,7 +95,7 @@ function PaymentContent() {
       const res = await fetch('/api/auth/me')
       const data = await res.json()
       if (!data.user) {
-        router.push(`/signup?plan=${planId}`)
+        router.push(`/signup?plan=${planId}${searchParams.get('promo') ? `&promo=${encodeURIComponent(searchParams.get('promo')!)}` : ''}`)
         return
       }
       setUser(data.user)
@@ -74,7 +112,7 @@ function PaymentContent() {
         if (!sub || sub.status === 'unlinked' || sub.status === 'pending') setShowWarning(true)
       }
     } catch {
-      router.push(`/signup?plan=${planId}`)
+      router.push(`/signup?plan=${planId}${searchParams.get('promo') ? `&promo=${encodeURIComponent(searchParams.get('promo')!)}` : ''}`)
     } finally {
       setCheckingAuth(false)
     }
@@ -139,6 +177,7 @@ function PaymentContent() {
       planId: plan.id,
       paymentMethod: payMethod,
       cashAppName: cashAppName.trim(),
+      ...(promo ? { promoCode: promo.code } : {}),
       ...login,
       ...(plan.ships ? { shipping: ship } : {}),
     })
@@ -213,11 +252,12 @@ function PaymentContent() {
     )
   }
 
+  const price = promo ? promo.price : plan.price
   const cashTag = siteConfig.cashAppTag
-  const cashLink = `https://cash.app/${cashTag}/${plan.price}`
+  const cashLink = `https://cash.app/${cashTag}/${price}`
   const noteCode = paymentNoteCode(plan)
   const venmoUser = siteConfig.venmoHandle.replace(/^@/, '')
-  const venmoLink = `https://venmo.com/?txn=pay&recipients=${encodeURIComponent(venmoUser)}&amount=${plan.price}&note=${encodeURIComponent(noteCode)}`
+  const venmoLink = `https://venmo.com/?txn=pay&recipients=${encodeURIComponent(venmoUser)}&amount=${price}&note=${encodeURIComponent(noteCode)}`
   const methodStyle: Record<PaymentMethod, { color: string; bg: string; border: string }> = {
     cashapp: { color: '#4ade80', bg: 'linear-gradient(140deg, rgba(0,214,50,.12), rgba(0,0,0,.25))', border: 'rgba(0,214,50,.35)' },
     zelle: { color: '#c4b5fd', bg: 'linear-gradient(140deg, rgba(109,30,212,.16), rgba(0,0,0,.25))', border: 'rgba(139,92,246,.45)' },
@@ -318,15 +358,37 @@ function PaymentContent() {
             </div>
             <div className="text-right">
               <p className="text-xs uppercase tracking-widest text-muted mb-1">Total</p>
-              <p className="text-3xl font-extrabold" style={{ fontFamily: 'var(--font-display)' }}>${plan.price}</p>
+              {promo && <p className="text-sm text-muted" style={{ textDecoration: 'line-through' }}>${plan.price}</p>}
+              <p className="text-3xl font-extrabold" style={{ fontFamily: 'var(--font-display)' }}>${price}</p>
             </div>
           </div>
+          {promo && (
+            <div className="alert alert-success mt-3 flex flex-wrap items-center justify-between gap-2">
+              <span>✓ <b>{promo.code}</b> ({promo.label}): ${promo.discount} off</span>
+              <button type="button" className="link text-sm" onClick={() => { setPromo(null); setPromoInput(''); setPromoError('') }}>Remove</button>
+            </div>
+          )}
           {plan.kind === 'bundle' && plan.setupFee !== undefined && (
             <BoxPlanPicker plan={plan} onChange={(id) => router.replace(`/pay?plan=${id}&confirmed=1`)} />
           )}
-          <div className="mt-3 text-sm">
+          <div className="mt-3 text-sm flex flex-wrap gap-4">
             <Link href="/renew" className="link">Change plan</Link>
+            {!promo && !promoOpen && <button type="button" className="link" onClick={() => setPromoOpen(true)}>Have a promo code?</button>}
           </div>
+          {!promo && promoOpen && (
+            <div className="mt-3">
+              <label htmlFor="promo" className="field-label" style={{ fontSize: 13 }}>Promo code</label>
+              <div className="flex gap-2">
+                <input id="promo" type="text" value={promoInput} autoCapitalize="characters" autoComplete="off" spellCheck={false}
+                  onChange={(e) => { setPromoInput(e.target.value); setPromoError('') }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyPromoCode(promoInput) } }}
+                  placeholder="Enter code" maxLength={32} />
+                <button type="button" className="btn-secondary" disabled={promoBusy || !promoInput.trim()} onClick={() => applyPromoCode(promoInput)}
+                  style={{ minHeight: 40, padding: '8px 16px', fontSize: 13 }}>{promoBusy ? 'Checking…' : 'Apply'}</button>
+              </div>
+              {promoError && <p className="field-hint" style={{ color: '#fca5a5' }}>{promoError}</p>}
+            </div>
+          )}
         </div>
 
         {/* Step 1: choose how to pay, then send */}
@@ -343,7 +405,7 @@ function PaymentContent() {
             ))}
           </div>
 
-          <p className="field-label"><span className="text-red">02</span>&nbsp; Send ${plan.price} with {PAYMENT_METHOD_LABELS[payMethod]}</p>
+          <p className="field-label"><span className="text-red">02</span>&nbsp; Send ${price} with {PAYMENT_METHOD_LABELS[payMethod]}</p>
           <div className="rounded-2xl p-5" style={{ background: ms.bg, border: `1px solid ${ms.border}` }}>
             <p className="text-xs uppercase tracking-widest text-muted mb-1">{payMethod === 'zelle' ? 'Zelle to this phone number' : payMethod === 'applepay' ? 'Apple Pay (Apple Cash) to this phone number' : 'Send to'}</p>
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -376,28 +438,28 @@ function PaymentContent() {
             {payMethod === 'cashapp' && (
               <>
                 <a href={cashLink} target="_blank" rel="noopener noreferrer" className="btn-primary w-full mt-4" style={{ background: 'linear-gradient(135deg,#00d632,#00a827)', boxShadow: '0 10px 30px rgba(0,214,50,.2)' }}>
-                  Open Cash App · ${plan.price} ↗
+                  Open Cash App · ${price} ↗
                 </a>
-                <p className="text-xs text-muted mt-3">On a computer? Open Cash App on your phone → Pay → {cashTag} → ${plan.price} → add note {noteCode}.</p>
+                <p className="text-xs text-muted mt-3">On a computer? Open Cash App on your phone → Pay → {cashTag} → ${price} → add note {noteCode}.</p>
               </>
             )}
             {payMethod === 'zelle' && (
-              <p className="text-sm text-muted mt-4">Open your bank’s app → Zelle → Send → enter <b>{siteConfig.zellePhone}</b> → ${plan.price} → memo <b>{noteCode}</b>.</p>
+              <p className="text-sm text-muted mt-4">Open your bank’s app → Zelle → Send → enter <b>{siteConfig.zellePhone}</b> → ${price} → memo <b>{noteCode}</b>.</p>
             )}
             {payMethod === 'applepay' && (
               <>
                 <a href={applePayLink} className="btn-primary w-full mt-4" style={{ background: 'linear-gradient(135deg,#3a3a3c,#000)', border: '1px solid rgba(255,255,255,.35)', boxShadow: '0 10px 30px rgba(0,0,0,.35)' }}>
-                  Open Messages · ${plan.price} ↗
+                  Open Messages · ${price} ↗
                 </a>
-                <p className="text-xs text-muted mt-3">On your iPhone: Messages → text <b>{siteConfig.applePayPhone}</b> → tap ＋ → Apple Cash → ${plan.price} → Send, and type <b>{noteCode}</b> as the message. You can also use Wallet → Apple Cash → Send.</p>
+                <p className="text-xs text-muted mt-3">On your iPhone: Messages → text <b>{siteConfig.applePayPhone}</b> → tap ＋ → Apple Cash → ${price} → Send, and type <b>{noteCode}</b> as the message. You can also use Wallet → Apple Cash → Send.</p>
               </>
             )}
             {payMethod === 'venmo' && (
               <>
                 <a href={venmoLink} target="_blank" rel="noopener noreferrer" className="btn-primary w-full mt-4" style={{ background: 'linear-gradient(135deg,#3d95ce,#008cff)', boxShadow: '0 10px 30px rgba(0,140,255,.2)' }}>
-                  Open Venmo · ${plan.price} ↗
+                  Open Venmo · ${price} ↗
                 </a>
-                <p className="text-xs text-muted mt-3">On a computer? Open Venmo on your phone → Pay → {siteConfig.venmoHandle} → ${plan.price} → note {noteCode}.</p>
+                <p className="text-xs text-muted mt-3">On a computer? Open Venmo on your phone → Pay → {siteConfig.venmoHandle} → ${price} → note {noteCode}.</p>
               </>
             )}
           </div>
@@ -413,7 +475,7 @@ function PaymentContent() {
           <p className="field-hint">So we can match your payment.</p>
           {error && <div className="alert alert-error mt-4">{error}</div>}
           <button type="submit" disabled={loading} className="btn-primary w-full mt-5">
-            {loading ? 'Submitting…' : `I sent $${plan.price} →`}
+            {loading ? 'Submitting…' : `I sent $${price} →`}
           </button>
         </form>
       </div>
