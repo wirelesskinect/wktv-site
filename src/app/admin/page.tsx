@@ -5,6 +5,7 @@ import Link from 'next/link'
 import SalesDashboard from '@/components/SalesDashboard'
 import ReferralsPanel from '@/components/ReferralsPanel'
 import ResellerInquiriesPanel from './ResellerInquiriesPanel'
+import RememberedDetails from '@/components/RememberedDetails'
 import { PLAN_LIST, getPlan, paymentNoteCode, PAYMENT_METHOD_LABELS } from '@/lib/plans'
 
 interface PendingSignup {
@@ -111,6 +112,36 @@ export default function AdminPage() {
       setRenewMsg({ ok: false, text: 'Could not renew. Nothing was changed; try again.' })
     } finally {
       setRenewing(false)
+    }
+  }
+
+  // Give 1 free month (referral reward or make-good): extends the line, logged as $0, not a sale
+  const [freeFor, setFreeFor] = useState<string | null>(null)
+  const [freeReason, setFreeReason] = useState<'referral' | 'free'>('referral')
+  const [freeNote, setFreeNote] = useState('')
+  const [giving, setGiving] = useState(false)
+  const [freeMsg, setFreeMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  async function giveFreeMonth(a: any) {
+    if (!window.confirm(`Give ${a.tvLogin} (${a.email}) 1 free month${freeReason === 'referral' ? ' for a referral' : ''}?\n\nThis adds 1 month to their line on the IPTV panel right away (same number of connections, uses panel credits). It shows on the Sales dashboard as a free month, not as a sale.`)) return
+    setGiving(true)
+    setFreeMsg(null)
+    try {
+      const res = await fetch('/api/admin/free-month', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: a.id, reason: freeReason, note: freeNote }),
+      })
+      const data = await res.json()
+      setFreeMsg({ ok: res.ok && !data.error, text: data.error || data.message })
+      if (res.ok && !data.error) {
+        setFreeNote('')
+        loadAccounts()
+      }
+    } catch {
+      setFreeMsg({ ok: false, text: 'Something went wrong. Refresh and check their expiration date before trying again.' })
+    } finally {
+      setGiving(false)
     }
   }
   const [editingExisting, setEditingExisting] = useState(false)
@@ -254,7 +285,10 @@ export default function AdminPage() {
           <h1 className="page-title">Orders &amp; activations</h1>
           <p className="page-sub">Confirm the payment (Cash App, Zelle, Venmo or Apple Pay) and its note code before approving. Free trials have no payment.</p>
         </div>
-        <button onClick={() => fetchPendingSignups()} className="btn-secondary">↻ Refresh</button>
+        <div className="flex flex-wrap gap-2">
+          <a href="#approvals" className="btn-primary">↓ Pending approvals ({pendingSignups.filter(s => s.status === 'pending').length})</a>
+          <button onClick={() => fetchPendingSignups()} className="btn-secondary">↻ Refresh</button>
+        </div>
       </div>
       <div>
         {/* IPTV panel connection */}
@@ -272,7 +306,7 @@ export default function AdminPage() {
             </p>
           )}
           {panel?.plans && (
-            <details className="mt-3 text-sm">
+            <RememberedDetails storageKey="plans" defaultOpen={false} className="mt-3 text-sm">
               <summary className="cursor-pointer text-gray-300">Plans → panel packages</summary>
               <ul className="mt-2 space-y-1 text-gray-400">
                 {panel.plans.map((p: any) => (
@@ -285,7 +319,7 @@ export default function AdminPage() {
                   <div>Trial packages: {panel.packages.trial.map((k: any) => `${k.id} = ${k.name}`).join(' · ') || 'none'}</div>
                 </div>
               )}
-            </details>
+            </RememberedDetails>
           )}
         </div>
 
@@ -331,10 +365,10 @@ export default function AdminPage() {
         </details>
 
         {/* Sales & signups dashboard */}
-        <details open className="tile mb-8" style={{ padding: '16px 20px' }}>
+        <RememberedDetails storageKey="sales" className="tile mb-8" style={{ padding: '16px 20px' }}>
           <summary className="cursor-pointer"><strong>Sales</strong> <span className="text-sm text-gray-400">: revenue, signups and plans over time</span></summary>
           <div className="mt-4"><SalesDashboard /></div>
-        </details>
+        </RememberedDetails>
 
         {/* Referrals: free month for the referrer when their friend buys a 1-year plan */}
         <ReferralsSection />
@@ -343,7 +377,7 @@ export default function AdminPage() {
         <ResellerInquiriesSection />
 
         {/* All website accounts */}
-        <details open className="tile mb-8" style={{ padding: '16px 20px' }}>
+        <RememberedDetails storageKey="accounts" className="tile mb-8" style={{ padding: '16px 20px' }}>
           <summary className="cursor-pointer">
             <strong>Accounts</strong> <span className="text-sm text-gray-400">: {accounts ? `${accounts.length} total` : 'loading…'}</span>
           </summary>
@@ -383,9 +417,15 @@ export default function AdminPage() {
                   </div>
                   <div className="flex flex-wrap gap-2 items-center">
                     {a.tvLogin && (
-                      <button type="button" onClick={() => { setRenewFor(renewFor === a.id ? null : a.id); setRenewMsg(null) }}
+                      <button type="button" onClick={() => { setRenewFor(renewFor === a.id ? null : a.id); setFreeFor(null); setRenewMsg(null) }}
                         className="btn-primary" style={{ minHeight: 36, padding: '6px 12px', fontSize: 13 }}>
                         {renewFor === a.id ? 'Close' : 'Renew'}
+                      </button>
+                    )}
+                    {a.tvLogin && (
+                      <button type="button" onClick={() => { setFreeFor(freeFor === a.id ? null : a.id); setRenewFor(null); setFreeMsg(null) }}
+                        className="btn-secondary" style={{ minHeight: 36, padding: '6px 12px', fontSize: 13 }}>
+                        {freeFor === a.id ? 'Close' : 'Free month'}
                       </button>
                     )}
                     <button type="button" onClick={() => editAccount(a)}
@@ -435,14 +475,40 @@ export default function AdminPage() {
                       {renewMsg && <div className={`alert ${renewMsg.ok ? 'alert-success' : 'alert-error'} mt-3`}>{renewMsg.text}</div>}
                     </div>
                   )}
+                  {freeFor === a.id && (
+                    <div className="w-full rounded-xl p-4 mt-1" style={{ background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.15)' }}>
+                      <p className="font-bold mb-1">Give {a.tvLogin} 1 free month</p>
+                      <p className="text-sm text-gray-400 mb-3">
+                        Adds 1 month to their existing line on the IPTV panel (same connections, same username and password). It’s logged on the Sales dashboard as a free month and doesn’t count as a sale or revenue.
+                        {a.pendingOrders ? ' They have an order waiting below. Approve that first if they also paid.' : ''}
+                      </p>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="field-label" style={{ fontSize: 13 }}>Reason</label>
+                          <select value={freeReason} onChange={(e) => setFreeReason(e.target.value as 'referral' | 'free')}>
+                            <option value="referral">Referral reward</option>
+                            <option value="free">Other free month (promo, make-good)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="field-label" style={{ fontSize: 13 }}>Note (optional)</label>
+                          <input type="text" value={freeNote} onChange={(e) => setFreeNote(e.target.value)} placeholder={freeReason === 'referral' ? 'e.g. referred John (555-1234)' : 'e.g. outage make-good'} maxLength={120} />
+                        </div>
+                      </div>
+                      <button type="button" onClick={() => giveFreeMonth(a)} disabled={giving} className="btn-primary w-full mt-4">
+                        {giving ? 'Adding on the panel…' : 'Give 1 free month · $0'}
+                      </button>
+                      {freeMsg && <div className={`alert ${freeMsg.ok ? 'alert-success' : 'alert-error'} mt-3`}>{freeMsg.text}</div>}
+                    </div>
+                  )}
                 </div>
               ))}
             {accounts && accounts.length === 0 && <p className="text-sm text-gray-400">No accounts yet.</p>}
           </div>
-        </details>
+        </RememberedDetails>
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-3 sm:gap-6 mb-8">
+        <div id="approvals" className="grid grid-cols-3 gap-3 sm:gap-6 mb-8">
           <div className="card text-center">
             <p className="text-4xl font-extrabold" style={{ color: '#fde68a', fontFamily: 'var(--font-display)' }}>
               {pendingSignups.filter(s => s.status === 'pending').length}
@@ -598,25 +664,25 @@ export default function AdminPage() {
 function ReferralsSection() {
   const [due, setDue] = useState(0)
   return (
-    <details open className="tile mb-8" style={{ padding: '16px 20px' }}>
+    <RememberedDetails storageKey="referrals" className="tile mb-8" style={{ padding: '16px 20px' }}>
       <summary className="cursor-pointer">
         <strong>Referrals</strong>{' '}
         <span className="text-sm text-gray-400">: {due ? `${due} free month${due > 1 ? 's' : ''} to give` : 'friends who started a trial with a referral username'}</span>
       </summary>
       <div className="mt-4"><ReferralsPanel onDueCount={setDue} /></div>
-    </details>
+    </RememberedDetails>
   )
 }
 
 function ResellerInquiriesSection() {
   const [newCount, setNewCount] = useState(0)
   return (
-    <details open className="tile mb-8" style={{ padding: '16px 20px' }}>
+    <RememberedDetails storageKey="reseller-inquiries" className="tile mb-8" style={{ padding: '16px 20px' }}>
       <summary className="cursor-pointer">
         <strong>Reseller inquiries</strong>{' '}
         <span className="text-sm text-gray-400">: {newCount ? `${newCount} new` : 'people who asked to become a reseller'}</span>
       </summary>
       <div className="mt-4"><ResellerInquiriesPanel onNewCount={setNewCount} /></div>
-    </details>
+    </RememberedDetails>
   )
 }

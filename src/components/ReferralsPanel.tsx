@@ -47,21 +47,23 @@ export default function ReferralsPanel({ onDueCount }: { onDueCount?: (n: number
   }
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function markGiven(r: Referral) {
-    const ok = window.confirm(
-      `Give ${r.referrerUsername} their free month?\n\n` +
-      `1. In your IPTV panel, add 1 month to the line "${r.referrerUsername}".\n` +
-      `2. Then press OK here to mark this referral as paid out.\n\n` +
-      `This website doesn’t change the line itself.`
+  // auto = add the month on the IPTV panel now; otherwise just mark it (you already added it by hand)
+  async function markGiven(r: Referral, auto: boolean) {
+    const ok = window.confirm(auto
+      ? `Give ${r.referrerUsername} their free month now?\n\n` +
+        `This adds 1 month to "${r.referrerUsername}" on the IPTV panel right away (same number of connections, uses panel credits) ` +
+        `and logs it as a free referral month. It isn't counted as a sale.`
+      : `Mark this referral as paid out WITHOUT changing the line?\n\n` +
+        `Only do this if you already added 1 month to "${r.referrerUsername}" in your IPTV panel by hand.`
     )
     if (!ok) return
     setBusy(r.userId)
     setMsg(null)
     try {
-      const res = await fetch('/api/admin/referrals', {
+      const res = await fetch(auto ? '/api/admin/free-month' : '/api/admin/referrals', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ referredUserId: r.userId }),
+        body: JSON.stringify(auto ? { referredUserId: r.userId, reason: 'referral' } : { referredUserId: r.userId }),
       })
       const data = await res.json()
       setMsg({ ok: res.ok, text: data.message || data.error || 'Something went wrong.' })
@@ -82,7 +84,8 @@ export default function ReferralsPanel({ onDueCount }: { onDueCount?: (n: number
     <div style={{ minWidth: 0 }}>
       <p className="text-sm text-gray-400 mb-4">
         Customers share their link from their account page, or a friend types the referrer’s TV username (spelled exactly) when starting a free trial.
-        When that friend buys a 1-year plan, the referrer is owed 1 free month.
+        When that friend buys a 1-year plan, the referrer is owed 1 free month. “Give free month” adds it on the panel and logs it on the Sales dashboard (not as a sale).
+        For a referral that isn’t listed here, use <b>Free month</b> next to the customer in Accounts.
       </p>
       {needsMigration && (
         <div className="alert alert-warn mb-4">Referrals need a quick database update before they can be saved. Run the 2026-10-26 referrals SQL in Supabase.</div>
@@ -107,9 +110,14 @@ export default function ReferralsPanel({ onDueCount }: { onDueCount?: (n: number
                 {r.status === 'given' && <p className="text-sm text-muted mt-1">Free month given {day(r.rewardGivenAt)}</p>}
               </div>
               {r.status === 'due' && (
-                <button type="button" className="btn-primary" disabled={busy === r.userId} onClick={() => markGiven(r)} style={{ minHeight: 40, padding: '8px 14px', fontSize: 13 }}>
-                  {busy === r.userId ? 'Saving…' : 'Mark free month given'}
-                </button>
+                <div className="flex flex-col items-end gap-1">
+                  <button type="button" className="btn-primary" disabled={busy === r.userId} onClick={() => markGiven(r, true)} style={{ minHeight: 40, padding: '8px 14px', fontSize: 13 }}>
+                    {busy === r.userId ? 'Adding on the panel…' : 'Give free month'}
+                  </button>
+                  <button type="button" className="text-xs text-gray-400 underline" disabled={busy === r.userId} onClick={() => markGiven(r, false)}>
+                    Already added it by hand
+                  </button>
+                </div>
               )}
             </div>
           </div>

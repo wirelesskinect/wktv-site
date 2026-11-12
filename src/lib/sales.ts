@@ -1,6 +1,11 @@
 import { adminSupabase } from '@/lib/supabase-server'
 import { getPlan, type Plan } from '@/lib/plans'
 
+// Free months (referral rewards, make-goods) are saved as $0 payments with these methods.
+// They're counted on the dashboard but never as sales or revenue.
+export const FREE_METHODS = ['referral', 'free'] as const
+export const isFreeMonth = (p: { payment_method?: string | null }) => (FREE_METHODS as readonly string[]).includes(p.payment_method || '')
+
 // Last year's annual prices were $25 lower than today's.
 export const OLD_ANNUAL_DISCOUNT = 25
 const DAY = 86_400_000
@@ -51,7 +56,7 @@ export async function recordHistoricSale(userId: string, planId: string | null |
     .eq('user_id', userId)
     .eq('status', 'completed')
     .limit(50)
-  if ((existing || []).length) return false
+  if ((existing || []).some((p) => !isFreeMonth(p))) return false
 
   const sale = historicSale(plan, expiresAt)
   const error = await insertPayment({

@@ -12,7 +12,7 @@ const monthLabel = (m: string, long = false) =>
   new Date(`${m}-15T00:00:00Z`).toLocaleDateString('en-US', { month: long ? 'long' : 'short', year: long ? 'numeric' : '2-digit', timeZone: 'UTC' })
 const methodLabel: Record<string, string> = { cashapp: 'Cash App', zelle: 'Zelle', venmo: 'Venmo', applepay: 'Apple Pay', cash: 'Cash', other: 'Other', backfill: 'Historic', trial: 'Trial' }
 
-type Month = { month: string; real: number; historic: number; signups: number; sales: number }
+type Month = { month: string; real: number; historic: number; signups: number; sales: number; free: number }
 
 function Tile({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -173,11 +173,13 @@ export default function SalesDashboard() {
 
   return (
     <div className="grid gap-4" style={{ minWidth: 0 }}>
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4" style={{ minWidth: 0 }}>
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-5" style={{ minWidth: 0 }}>
         <Tile label="Total sales" value={money(t.totalCents)} sub={`${t.sales} sale${t.sales === 1 ? '' : 's'} all time`} />
         <Tile label="This month" value={money(t.thisMonthCents)} />
         <Tile label="Accounts" value={String(t.accounts)} sub={`+${t.accountsThisMonth} this month`} />
         <Tile label="Active lines" value={String(t.activeLines)} sub={`${t.activeConnections} connection${t.activeConnections === 1 ? '' : 's'}`} />
+        <Tile label="Free months given" value={String(t.freeMonths || 0)}
+          sub={`${t.freeReferral || 0} referral · +${t.freeThisMonth || 0} this month · not counted as sales`} />
       </div>
       <p className="text-sm text-gray-400">
         Website sales <b className="text-white">{money(t.realCents)}</b> · Historic (backfilled) <b className="text-white">{money(t.historicCents)}</b>
@@ -217,6 +219,30 @@ export default function SalesDashboard() {
                 </tr>
               ))}
               {data.plans.length === 0 && <tr><td colSpan={4} className="py-2 text-gray-400">No sales yet.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="card" style={{ padding: 18, minWidth: 0 }}>
+        <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+          <p className="font-bold">Free months given</p>
+          {t.freeMonths > 0 && <p className="text-sm text-muted">≈ {money(t.freeValueCents)} at the monthly price · $0 revenue</p>}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm whitespace-nowrap">
+            <thead><tr className="text-left text-gray-400"><th className="pb-2 font-medium">Date</th><th className="pb-2 font-medium">Customer</th><th className="pb-2 font-medium">Reason</th><th className="pb-2 font-medium">Connections</th><th className="pb-2 font-medium">Note</th></tr></thead>
+            <tbody>
+              {(data.freeRecent || []).map((f: any) => (
+                <tr key={f.id} className="border-t border-gray-800/60">
+                  <td className="py-2 whitespace-nowrap">{new Date(f.date).toLocaleDateString('en-US')}</td>
+                  <td className="py-2 pr-3">{f.email}</td>
+                  <td className="py-2">{f.reason}</td>
+                  <td className="py-2">{f.connections}</td>
+                  <td className="py-2 text-gray-400" style={{ whiteSpace: 'normal' }}>{f.note || '—'}</td>
+                </tr>
+              ))}
+              {!(data.freeRecent || []).length && <tr><td colSpan={5} className="py-2 text-gray-400">None yet. Use “Free month” next to an account, or pay out a referral below.</td></tr>}
             </tbody>
           </table>
         </div>

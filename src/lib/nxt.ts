@@ -10,6 +10,8 @@
 //   IPTV_PANEL_PASS   – reseller password
 //   NXT_PACKAGE_MAP   – JSON that maps each WKTV plan to a panel package ID,
 //                       e.g. {"trial-free":12,"monthly-1":3,"annual-5":9}
+//   NXT_FREE_MONTH_MAP – optional: 1-month package ID per connection count for free months,
+//                       e.g. {"1":33,"2":37,"3":41,"4":45,"5":49} (found automatically if not set)
 
 import { randomInt } from 'crypto'
 
@@ -108,6 +110,30 @@ export function packageIdForPlan(planId: string): string | null {
   } catch {
     return null
   }
+}
+
+// The panel's 1-month package with the given number of connections, so a free month
+// never changes how many screens a customer has.
+// Override with NXT_FREE_MONTH_MAP, e.g. {"1":33,"2":37,"3":41,"4":45,"5":49}.
+// Otherwise it's found by name: the "monthly-1" package (e.g. "1 Month (USA…) - cost 1 credits")
+// and its "/ Ncon" siblings (e.g. "1 Month / 3con (USA…) - cost 3 credits").
+export async function monthPackageForConnections(connections: number): Promise<{ id: string; name: string } | null> {
+  const n = Math.min(5, Math.max(1, Math.round(connections || 1)))
+  try {
+    const map = JSON.parse(process.env.NXT_FREE_MONTH_MAP || '{}')
+    const id = map?.[String(n)]
+    if (id !== undefined && id !== null && id !== '') return { id: String(id), name: `1 month · ${n} connection${n > 1 ? 's' : ''}` }
+  } catch {}
+
+  const baseId = packageIdForPlan('monthly-1')
+  if (!baseId) return null
+  const packages = await listPackages(false)
+  const base = packages.find((p) => p.id === baseId)
+  if (!base) return null
+  if (n === 1) return base
+  const stripCost = (name: string) => name.replace(/\s*-\s*cost\b.*$/i, '').replace(/\s+/g, ' ').trim().toLowerCase()
+  const want = stripCost(base.name).replace(/^1 month\b/, `1 month / ${n}con`)
+  return packages.find((p) => stripCost(p.name) === want) || null
 }
 
 export interface CreatedLine {
