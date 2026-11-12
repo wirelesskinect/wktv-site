@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
           iptv_password: password,
           plan_id: plan.id,
           plan_name: plan.name,
-          price_cents: plan.price * 100,
+          price_cents: typeof signup.amount_cents === 'number' ? signup.amount_cents : plan.price * 100, // what they paid (after any promo)
           connections: plan.connections,
           status: 'active',
           expires_at: expiresAt ? expiresAt.toISOString() : null,
