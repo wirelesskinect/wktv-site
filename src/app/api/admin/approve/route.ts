@@ -13,6 +13,7 @@ import {
   generateCredentials,
   NxtError,
 } from '@/lib/nxt'
+import { sendPlanActivatedEmail, emailConfigured } from '@/lib/email'
 
 export const dynamic = 'force-dynamic'
 
@@ -193,10 +194,25 @@ export async function POST(request: NextRequest) {
       mode === 'extended' ? 'Existing line extended on the IPTV panel.' :
       'Approved in manual mode (panel not connected): create or extend this line in your IPTV panel.'
 
+    // Email the customer their TV app login (box orders: no expiry shown, the 24-hour setup line isn't their plan)
+    const emailed = await sendPlanActivatedEmail({
+      to: signup.email,
+      name: signup.name,
+      planName: plan.name,
+      connections: plan.connections,
+      username,
+      password,
+      expiresAt: isBox ? null : expiresAt,
+      renewal: !!existing?.iptv_username && !isBox,
+      trial: isFreeTrial,
+      boxDevice: isBox ? plan.device : null,
+    })
+    const emailNote = emailed ? ' Login details emailed to the customer.' : emailConfigured() ? ' (The login email to the customer failed; share their login another way.)' : ''
+
     return NextResponse.json({
       success: true,
       mode,
-      message,
+      message: message + emailNote,
       panelLineId,
       credentials: { username, password },
       expiresAt: expiresAt ? expiresAt.toISOString() : null,
