@@ -4,6 +4,7 @@ import { adminSupabase } from '@/lib/supabase-server'
 import { getPlan } from '@/lib/plans'
 import { nxtConfigured, monthPackageForConnections, findLine, extendLine, setLineEnabled, NxtError } from '@/lib/nxt'
 import { insertPayment, FREE_METHODS } from '@/lib/sales'
+import { sendExtendedEmail } from '@/lib/email'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: 'Choose a customer.' }, { status: 400 })
 
   const [{ data: user }, { data: sub }] = await Promise.all([
-    adminSupabase.from('users').select('id, email').eq('id', userId).maybeSingle(),
+    adminSupabase.from('users').select('id, email, name').eq('id', userId).maybeSingle(),
     adminSupabase.from('user_subscriptions').select('*').eq('user_id', userId).maybeSingle(),
   ])
   if (!user) return NextResponse.json({ error: 'Account not found.' }, { status: 404 })
@@ -124,12 +125,15 @@ export async function POST(req: NextRequest) {
   })
   if (payError) console.error('free month record error:', payError)
 
+  const emailed = await sendExtendedEmail({ to: user.email, name: user.name, username: sub.iptv_username, expiresAt, reason })
+
   const when = expiresAt ? expiresAt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' }) : 'unknown'
   return NextResponse.json({
     success: true,
-    message: mode === 'panel'
+    message: (mode === 'panel'
       ? `Added 1 free month to ${sub.iptv_username} on the IPTV panel (${connections} connection${connections > 1 ? 's' : ''}). New expiration: ${when}.${subError ? ' The website’s date didn’t save; refresh and check it.' : ''}`
-      : `Added 1 free month to ${sub.iptv_username} on the website (manual mode, panel not connected: add 1 month on your panel too). New expiration: ${when}.`,
+      : `Added 1 free month to ${sub.iptv_username} on the website (manual mode, panel not connected: add 1 month on your panel too). New expiration: ${when}.`
+    ) + (emailed ? ' Customer emailed.' : ''),
     expiresAt: expiresAt ? expiresAt.toISOString() : null,
   })
 }
