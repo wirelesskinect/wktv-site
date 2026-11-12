@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAdminFromRequest } from '@/lib/auth'
 import { adminSupabase } from '@/lib/supabase-server'
 import { getPlan } from '@/lib/plans'
+import { insertPayment } from '@/lib/sales'
 
 export const dynamic = 'force-dynamic'
 
@@ -109,6 +110,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Could not save. Please try again.' }, { status: 500 })
   }
   if (!updated || !updated.length) return NextResponse.json({ error: 'The free month for this referral was already given.' }, { status: 409 })
+
+  // Log it as a free referral month on the Sales dashboard ($0, not a sale)
+  if (user.referred_by_user_id) {
+    const { data: sub } = await adminSupabase.from('user_subscriptions').select('id, plan_id, connections').eq('user_id', user.referred_by_user_id).maybeSingle()
+    const connections = sub?.connections || getPlan(sub?.plan_id)?.connections || 1
+    const err = await insertPayment({
+      user_id: user.referred_by_user_id,
+      subscription_id: sub?.id || null,
+      amount_cents: 0,
+      payment_method: 'referral',
+      payment_reference: `Free month (referral): referred ${user.email} · added on panel by hand`,
+      status: 'completed',
+      plan_id: `free-${connections}`,
+    })
+    if (err) console.error('referral free month record error:', err)
+  }
 
   return NextResponse.json({ success: true, message: `Marked as given. Make sure 1 month is added to ${user.referred_by} in your IPTV panel.` })
 }
