@@ -5,6 +5,7 @@ import Link from 'next/link'
 import SalesDashboard from '@/components/SalesDashboard'
 import ReferralsPanel from '@/components/ReferralsPanel'
 import ResellerInquiriesPanel from './ResellerInquiriesPanel'
+import RememberedDetails from '@/components/RememberedDetails'
 import { PLAN_LIST, getPlan, paymentNoteCode, PAYMENT_METHOD_LABELS } from '@/lib/plans'
 
 interface PendingSignup {
@@ -254,7 +255,10 @@ export default function AdminPage() {
           <h1 className="page-title">Orders &amp; activations</h1>
           <p className="page-sub">Confirm the payment (Cash App, Zelle, Venmo or Apple Pay) and its note code before approving. Free trials have no payment.</p>
         </div>
-        <button onClick={() => fetchPendingSignups()} className="btn-secondary">↻ Refresh</button>
+        <div className="flex flex-wrap gap-2">
+          <a href="#approvals" className="btn-primary">↓ Pending approvals ({pendingSignups.filter(s => s.status === 'pending').length})</a>
+          <button onClick={() => fetchPendingSignups()} className="btn-secondary">↻ Refresh</button>
+        </div>
       </div>
       <div>
         {/* IPTV panel connection */}
@@ -272,7 +276,7 @@ export default function AdminPage() {
             </p>
           )}
           {panel?.plans && (
-            <details className="mt-3 text-sm">
+            <RememberedDetails storageKey="plans" defaultOpen={false} className="mt-3 text-sm">
               <summary className="cursor-pointer text-gray-300">Plans → panel packages</summary>
               <ul className="mt-2 space-y-1 text-gray-400">
                 {panel.plans.map((p: any) => (
@@ -285,7 +289,7 @@ export default function AdminPage() {
                   <div>Trial packages: {panel.packages.trial.map((k: any) => `${k.id} = ${k.name}`).join(' · ') || 'none'}</div>
                 </div>
               )}
-            </details>
+            </RememberedDetails>
           )}
         </div>
 
@@ -331,10 +335,10 @@ export default function AdminPage() {
         </details>
 
         {/* Sales & signups dashboard */}
-        <details open className="tile mb-8" style={{ padding: '16px 20px' }}>
+        <RememberedDetails storageKey="sales" className="tile mb-8" style={{ padding: '16px 20px' }}>
           <summary className="cursor-pointer"><strong>Sales</strong> <span className="text-sm text-gray-400">: revenue, signups and plans over time</span></summary>
           <div className="mt-4"><SalesDashboard /></div>
-        </details>
+        </RememberedDetails>
 
         {/* Referrals: free month for the referrer when their friend buys a 1-year plan */}
         <ReferralsSection />
@@ -343,7 +347,7 @@ export default function AdminPage() {
         <ResellerInquiriesSection />
 
         {/* All website accounts */}
-        <details open className="tile mb-8" style={{ padding: '16px 20px' }}>
+        <RememberedDetails storageKey="accounts" className="tile mb-8" style={{ padding: '16px 20px' }}>
           <summary className="cursor-pointer">
             <strong>Accounts</strong> <span className="text-sm text-gray-400">: {accounts ? `${accounts.length} total` : 'loading…'}</span>
           </summary>
@@ -439,10 +443,10 @@ export default function AdminPage() {
               ))}
             {accounts && accounts.length === 0 && <p className="text-sm text-gray-400">No accounts yet.</p>}
           </div>
-        </details>
+        </RememberedDetails>
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-3 sm:gap-6 mb-8">
+        <div id="approvals" className="grid grid-cols-3 gap-3 sm:gap-6 mb-8">
           <div className="card text-center">
             <p className="text-4xl font-extrabold" style={{ color: '#fde68a', fontFamily: 'var(--font-display)' }}>
               {pendingSignups.filter(s => s.status === 'pending').length}
@@ -598,25 +602,25 @@ export default function AdminPage() {
 function ReferralsSection() {
   const [due, setDue] = useState(0)
   return (
-    <details open className="tile mb-8" style={{ padding: '16px 20px' }}>
+    <RememberedDetails storageKey="referrals" className="tile mb-8" style={{ padding: '16px 20px' }}>
       <summary className="cursor-pointer">
         <strong>Referrals</strong>{' '}
         <span className="text-sm text-gray-400">: {due ? `${due} free month${due > 1 ? 's' : ''} to give` : 'friends who started a trial with a referral username'}</span>
       </summary>
       <div className="mt-4"><ReferralsPanel onDueCount={setDue} /></div>
-    </details>
+    </RememberedDetails>
   )
 }
 
 function ResellerInquiriesSection() {
   const [newCount, setNewCount] = useState(0)
   return (
-    <details open className="tile mb-8" style={{ padding: '16px 20px' }}>
+    <RememberedDetails storageKey="reseller-inquiries" className="tile mb-8" style={{ padding: '16px 20px' }}>
       <summary className="cursor-pointer">
         <strong>Reseller inquiries</strong>{' '}
         <span className="text-sm text-gray-400">: {newCount ? `${newCount} new` : 'people who asked to become a reseller'}</span>
       </summary>
       <div className="mt-4"><ResellerInquiriesPanel onNewCount={setNewCount} /></div>
-    </details>
+    </RememberedDetails>
   )
 }
