@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   const [usersRes, subsRes, ordersRes] = await Promise.all([
     adminSupabase.from('users').select('id, email, name, phone, role, created_at').order('created_at', { ascending: false }).limit(1000),
     adminSupabase.from('user_subscriptions').select('user_id, iptv_username, plan_id, plan_name, status, expires_at').limit(2000),
-    adminSupabase.from('pending_signups').select('user_id, status').limit(5000),
+    adminSupabase.from('pending_signups').select('id, user_id, status, plan_name, amount_cents, created_at').order('created_at', { ascending: false }).limit(5000),
   ])
   if (usersRes.error) {
     console.error('accounts list error:', usersRes.error)
@@ -22,11 +22,13 @@ export async function GET(req: NextRequest) {
   }
 
   const subs = new Map((subsRes.data || []).map((s) => [s.user_id, s]))
-  const orders = new Map<string, { total: number; pending: number }>()
+  const orders = new Map<string, { total: number; pending: number; waiting: { id: string; planName: string; amountCents: number; createdAt: string } | null }>()
   for (const o of ordersRes.data || []) {
-    const c = orders.get(o.user_id) || { total: 0, pending: 0 }
+    const c = orders.get(o.user_id) || { total: 0, pending: 0, waiting: null }
     c.total++
     if (o.status === 'pending' || o.status === 'processing') c.pending++
+    // Newest order still waiting for approval (shown with an Approve button on the account)
+    if (o.status === 'pending' && !c.waiting) c.waiting = { id: o.id, planName: o.plan_name, amountCents: o.amount_cents, createdAt: o.created_at }
     orders.set(o.user_id, c)
   }
 
@@ -46,6 +48,7 @@ export async function GET(req: NextRequest) {
       expiresAt: s?.expires_at || null,
       orders: orders.get(u.id)?.total || 0,
       pendingOrders: orders.get(u.id)?.pending || 0,
+      waitingOrder: orders.get(u.id)?.waiting || null,
       isYou: u.id === admin.id,
     }
   })
