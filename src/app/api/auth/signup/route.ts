@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 import { signup, getSessionCookieName } from '@/lib/auth'
 import { clientIp, signupBlocked, record } from '@/lib/rate-limit'
+import { sendWelcomeEmail } from '@/lib/email'
 
 const MIN_PASSWORD = 8
 
@@ -50,6 +51,8 @@ export async function POST(request: NextRequest) {
     }
 
     await record('signup', email, ip).catch(() => {})
+    // Welcome email (never includes the password; a failure doesn't block signup)
+    await sendWelcomeEmail({ to: email, name: name || null })
 
     // Set session cookie
     const response = NextResponse.json({ user: result.user })
