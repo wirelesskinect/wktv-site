@@ -4,6 +4,7 @@ import { adminSupabase } from '@/lib/supabase-server'
 import { getPlan, type Plan } from '@/lib/plans'
 import { nxtConfigured, packageIdForPlan, findLine, extendLine, setLineEnabled, NxtError } from '@/lib/nxt'
 import { insertPayment } from '@/lib/sales'
+import { sendExtendedEmail } from '@/lib/email'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
   }
 
   const [{ data: user }, { data: sub }] = await Promise.all([
-    adminSupabase.from('users').select('id, email').eq('id', userId).maybeSingle(),
+    adminSupabase.from('users').select('id, email, name').eq('id', userId).maybeSingle(),
     adminSupabase.from('user_subscriptions').select('*').eq('user_id', userId).maybeSingle(),
   ])
   if (!user) return NextResponse.json({ error: 'Account not found.' }, { status: 404 })
@@ -116,12 +117,15 @@ export async function POST(req: NextRequest) {
     plan_id: plan.id,
   })
 
+  const emailed = await sendExtendedEmail({ to: user.email, name: user.name, username: sub.iptv_username, expiresAt, reason: 'renewal', planName: plan.name })
+
   const when = expiresAt ? expiresAt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'unknown'
   return NextResponse.json({
     success: true,
-    message: mode === 'panel'
+    message: (mode === 'panel'
       ? `Renewed ${sub.iptv_username} with ${plan.name} on the IPTV panel. New expiration: ${when}.`
-      : `Renewed ${sub.iptv_username} with ${plan.name} (manual mode, panel not connected: extend it in your panel too). New expiration: ${when}.`,
+      : `Renewed ${sub.iptv_username} with ${plan.name} (manual mode, panel not connected: extend it in your panel too). New expiration: ${when}.`
+    ) + (emailed ? ' Customer emailed.' : ''),
     expiresAt: expiresAt ? expiresAt.toISOString() : null,
   })
 }
