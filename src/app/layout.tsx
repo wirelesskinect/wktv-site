@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import './theme-light.css'
+import Script from 'next/script'
 import { SiteHeader, SiteFooter } from '@/components/SiteChrome'
 
 export const metadata: Metadata = {
@@ -36,13 +38,18 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Apply the saved light/dark choice before the page paints */}
+        <script dangerouslySetInnerHTML={{ __html: "try{if(localStorage.getItem('wktv-theme')==='light')document.documentElement.setAttribute('data-theme','light')}catch(e){}" }} />
+      </head>
       <body>
         <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
           <SiteHeader />
           <main style={{ flex: 1 }}>{children}</main>
           <SiteFooter />
         </div>
+        <Script src="/theme.js" strategy="afterInteractive" />
       </body>
     </html>
   )
