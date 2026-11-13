@@ -9,7 +9,7 @@ export const siteConfig = {
   // Payment info
   cashAppTag: '$wirelesskinect',
   zellePhone: '484.680.3570',
-  venmoHandle: '@wirelesskinectsnax',
+  venmoHandle: '@tu-sean-phan',
   applePayPhone: '484.680.3570',
   cryptoWallets: {
     btc: '', // Add BTC address
