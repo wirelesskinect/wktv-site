@@ -122,11 +122,11 @@ export default function TrialIntake({ open, busy, error, onSubmit, onClose }: Pr
             </div>
             <p className="field-hint">{PASSWORD_RULE}. You can always see it on your account page.</p>
 
-            <label htmlFor="trial-referral" className="field-label mt-4" style={{ fontSize: 13 }}>Referral username <span className="text-muted font-normal">(optional)</span></label>
+            <label htmlFor="trial-referral" className="field-label mt-4" style={{ fontSize: 13 }}>Referral code <span className="text-muted font-normal">(optional)</span></label>
             <input id="trial-referral" type="text" value={referral} onChange={(e) => setReferral(e.target.value)}
               autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} maxLength={64}
               placeholder="Your friend’s WKTV username" />
-            <p className="field-hint">Referred by a WKTV customer? Enter their username exactly as they spell it, capital letters included.</p>
+            <p className="field-hint">Referred by a WKTV customer? Their code is their WKTV username. Type it exactly, capital letters included.</p>
 
             <p className="text-sm text-muted mt-4">Your trial includes 2 connections, so you can share it with a friend or family member.</p>
 
