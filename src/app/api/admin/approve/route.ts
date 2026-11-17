@@ -206,6 +206,8 @@ export async function POST(request: NextRequest) {
       renewal: !!existing?.iptv_username && !isBox,
       trial: isFreeTrial,
       boxDevice: isBox ? plan.device : null,
+      // The password is never emailed; this just picks the wording ("the one you created")
+      passwordChosen: !!signup.requested_password && password === signup.requested_password,
     })
     const emailNote = emailed ? ' Login details emailed to the customer.' : emailConfigured() ? ' (The login email to the customer failed; share their login another way.)' : ''
 
