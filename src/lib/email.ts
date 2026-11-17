@@ -47,7 +47,7 @@ async function send(to: string, subject: string, bodyHtml: string, bodyText: str
   }
   if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return false
   const admin = await adminContact()
-  const html = bodyHtml.replace('{{FOOTER}}', footerHtml(admin))
+  const html = bodyHtml.replace('{{FOOTER}}', footerHtml(admin)).replace('{{HELP}}', helpHtml(admin))
   const text = `${bodyText}\n\n---\n${footerText(admin)}`
   try {
     const res = await fetch('https://api.resend.com/emails', {
@@ -144,6 +144,8 @@ export async function sendPlanActivatedEmail(opts: {
   trial: boolean
   boxDevice?: string | null
 }) {
+  // Free trials get their own full-width design (see sendTrialEmail below)
+  if (opts.trial && !opts.renewal && !opts.boxDevice) return sendTrialEmail(opts)
   const hi = opts.name ? `Hi ${esc(opts.name)},` : 'Hi,'
   const lifetime = !!opts.expiresAt && opts.expiresAt.getFullYear() - new Date().getFullYear() > 50
   const expires = lifetime ? 'Lifetime' : day(opts.expiresAt)
@@ -173,6 +175,99 @@ export async function sendPlanActivatedEmail(opts: {
   ].join(''))
   const text = `${opts.name ? `Hi ${opts.name},` : 'Hi,'}\n\n${title}.\n\nUsername: ${opts.username}\nPassword: ${opts.password}\nPlan: ${opts.planName}\nConnections: ${opts.connections}\n${expires ? `Expires: ${expires}\n` : ''}${opts.boxDevice ? `\nWe're setting up your ${opts.boxDevice} box and will ship it soon.\n` : ''}\nYour login is also on your account page: ${SITE_URL}/dashboard\nSetup guide: ${SITE_URL}/support.html#connect`
   return send(opts.to, `${title}: your ${BRAND} login`, html, text)
+}
+
+// 2b) Free trial ready: cinematic banner, login details, setup steps, refer-a-friend
+// Banner image: public/email/trial-header.jpg (served from www.wktv.live)
+const TRIAL_HEADER_IMG = `${SITE_URL}/email/trial-header.jpg`
+
+function helpHtml(admin: string): string {
+  const contact = admin
+    ? `<a href="mailto:${esc(admin)}" style="color:#ffffff;text-decoration:none">${esc(admin)}</a>`
+    : `<a href="${SITE_URL}/support" style="color:#ffffff;text-decoration:none">${SITE_URL.replace('https://www.', '')}/support</a>`
+  return `<p style="margin:0 0 6px;font-size:15px;line-height:1.5;color:#e5e5ea">Need help? ${contact}</p>
+<p style="margin:0 0 18px;font-size:15px"><a href="${SITE_URL}" style="color:#ffffff;text-decoration:underline">wktv.live</a></p>
+<p style="margin:0;font-size:12px;line-height:1.5;color:#77777f">This is a no-reply email. Replies to this address are not read.</p>`
+}
+
+async function sendTrialEmail(opts: {
+  to: string
+  name?: string | null
+  planName: string
+  connections: number
+  username: string
+  password: string
+  expiresAt: Date | null
+}) {
+  const first = (opts.name || '').trim().split(/\s+/)[0] || ''
+  const welcome = first ? `Welcome to ${BRAND}, ${esc(first)}.` : `Welcome to ${BRAND}.`
+  const length = /24/.test(opts.planName) ? '24-hour ' : ''
+  const expires = day(opts.expiresAt)
+  const font = `font-family:'Montserrat',Arial,Helvetica,sans-serif`
+
+  const row = (label: string, value: string | null | undefined, last = false) =>
+    value
+      ? `<tr><td style="padding:12px 0;${last ? '' : 'border-bottom:1px solid #3a3a40;'}font-size:16px;color:#e5e5ea">${esc(label)}</td><td style="padding:12px 0 12px 12px;${last ? '' : 'border-bottom:1px solid #3a3a40;'}font-size:16px;font-weight:700;color:#ffffff;word-break:break-all">${esc(value)}</td></tr>`
+      : ''
+  const rows = [
+    ['Username', opts.username],
+    ['Password', opts.password],
+    ['Plan', opts.planName],
+    ['Connections', String(opts.connections)],
+    ['Expires', expires],
+  ].filter(([, v]) => v) as [string, string][]
+  const details = rows.map(([k, v], i) => row(k, v, i === rows.length - 1)).join('')
+
+  const step = (n: number, text: string) =>
+    `<tr><td width="36" valign="middle" style="padding:6px 12px 6px 0"><div style="width:32px;height:32px;line-height:32px;border-radius:16px;background:#2a2a30;color:#ffffff;font-weight:700;font-size:15px;text-align:center">${n}</div></td><td valign="middle" style="padding:6px 0;font-size:16px;line-height:1.4;color:#ffffff">${text}</td></tr>`
+
+  const html = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><meta name="supported-color-schemes" content="dark"></head>
+<body style="margin:0;padding:0;background:#000000;${font};color:#ffffff">
+<div style="display:none;max-height:0;overflow:hidden">Your ${BRAND} login is inside. Start watching in minutes.</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#000000">
+<tr><td align="center" style="padding:0">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px">
+<tr><td style="padding:0"><a href="${SITE_URL}"><img src="${TRIAL_HEADER_IMG}" width="600" alt="${BRAND} · Watch Anywhere" style="display:block;width:100%;max-width:600px;height:auto;border:0;color:#ffffff;font-size:24px;font-weight:800;text-align:center"></a></td></tr>
+<tr><td align="center" style="padding:6px 24px 0">
+<h1 style="margin:0;font-size:36px;line-height:1.15;font-weight:800;color:#ffffff;letter-spacing:-0.5px">Your free trial is ready</h1>
+</td></tr>
+<tr><td style="padding:18px 40px 0">
+<p style="margin:0 0 4px;font-size:20px;font-weight:800;color:#ffffff">${welcome}</p>
+<p style="margin:0;font-size:16px;line-height:1.45;color:#e5e5ea">Explore live TV, movies, shows, and sports during your ${length}trial.</p>
+</td></tr>
+<tr><td style="padding:20px 28px 0">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#1c1c1f;border-radius:14px">
+<tr><td style="padding:10px 26px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${details}</table>
+</td></tr></table>
+</td></tr>
+<tr><td align="center" style="padding:18px 24px 0;font-size:14px;color:#e5e5ea">Keep your sign-in details private.</td></tr>
+<tr><td align="center" style="padding:20px 24px 0">
+<a href="${SITE_URL}/dashboard" style="display:inline-block;min-width:240px;background:#e30613;color:#ffffff;text-decoration:none;font-weight:800;font-size:18px;padding:15px 36px;border-radius:10px;text-align:center">View my account</a>
+</td></tr>
+<tr><td style="padding:30px 40px 0"><div style="border-top:1px solid #ffffff;opacity:0.6;font-size:0;line-height:0">&nbsp;</div></td></tr>
+<tr><td align="center" style="padding:26px 24px 0">
+<h2 style="margin:0 0 12px;font-size:26px;font-weight:800;color:#ffffff">Start watching</h2>
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;text-align:left">
+${step(1, 'Open the setup guide for your device.')}
+${step(2, `Sign in with your ${BRAND} trial details.`)}
+</table>
+<p style="margin:12px 0 0;font-size:16px"><a href="${SITE_URL}/support.html#connect" style="color:#ffffff;text-decoration:underline">View device setup guide</a></p>
+</td></tr>
+<tr><td style="padding:28px 20px 0">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#1c1c1f;border-radius:14px">
+<tr><td align="center" style="padding:24px 26px">
+<h2 style="margin:0 0 10px;font-size:26px;font-weight:800;color:#ffffff">Refer a friend</h2>
+<p style="margin:0 0 12px;font-size:16px;line-height:1.45;color:#e5e5ea">Share your personal link with friends and family to earn referral rewards.</p>
+<p style="margin:0;font-size:16px;font-weight:700"><a href="${SITE_URL}/dashboard" style="color:#ffffff;text-decoration:underline">Find my referral link</a></p>
+</td></tr></table>
+</td></tr>
+<tr><td align="center" style="padding:30px 24px 36px">{{HELP}}</td></tr>
+</table>
+</td></tr></table></body></html>`
+
+  const text = `${first ? `Welcome to ${BRAND}, ${first}.` : `Welcome to ${BRAND}.`}\n\nYour free trial is ready. Explore live TV, movies, shows, and sports during your ${length}trial.\n\nUsername: ${opts.username}\nPassword: ${opts.password}\nPlan: ${opts.planName}\nConnections: ${opts.connections}\n${expires ? `Expires: ${expires}\n` : ''}\nKeep your sign-in details private.\nView my account: ${SITE_URL}/dashboard\n\nStart watching:\n1. Open the setup guide for your device: ${SITE_URL}/support.html#connect\n2. Sign in with your ${BRAND} trial details.\n\nRefer a friend: share your personal link with friends and family to earn referral rewards. Find your link at ${SITE_URL}/dashboard`
+  return send(opts.to, `Your free trial is ready: your ${BRAND} login`, html, text)
 }
 
 // 3) Renewal done by admin, or a free month added
