@@ -12,6 +12,9 @@
 // To stop that, every background also uses a background-image gradient (Gmail never inverts images)
 // and every piece of text is wrapped in t() (two blend-mode layers that flip Gmail's inversion back).
 // Other email apps ignore the blend layers.
+//
+// Security: TV app passwords are never emailed. Customers create their own at checkout,
+// and can always see it on their account page (wktv.live/dashboard) after signing in.
 
 import { adminSupabase } from '@/lib/supabase-server'
 import { referralLink } from '@/lib/referral'
@@ -215,12 +218,27 @@ function referText(username: string | null | undefined): string {
     : ''
 }
 
-const startWatching = () =>
+const startWatching = (signIn = 'Sign in with your username and TV app password.') =>
   steps('Start watching', [
     'Open the setup guide and pick your device.',
     `Install the ${BRAND} app (it takes a few minutes).`,
-    'Sign in with your username and password above.',
+    signIn,
   ], [SETUP_URL, 'View device setup guide'])
+
+// Passwords are never emailed: say where the customer can find theirs
+type PasswordSource = 'created' | 'same' | 'account'
+const passwordValue = (src: PasswordSource) =>
+  ({ created: 'The one you created', same: 'Same as before', account: 'On your account page' })[src]
+const passwordNoteText = (src: PasswordSource) =>
+  src === 'created'
+    ? 'For your security, we never email passwords. Your TV app password is the one you created when you signed up. Forgot it? Sign in to your account to see it.'
+    : src === 'same'
+      ? 'For your security, we never email passwords. Your TV app password hasn’t changed. Forgot it? Sign in to your account to see it.'
+      : 'For your security, we never email passwords. Sign in to your account to see your TV app password any time.'
+function passwordNote(src: PasswordSource): string {
+  const [lead, ...rest] = passwordNoteText(src).split('. ')
+  return note(`<b style="color:#ffffff">${esc(lead)}.</b> ${esc(rest.join('. '))}<br>Username and password are case sensitive.`)
+}
 
 // ---------- The emails ----------
 
@@ -237,9 +255,9 @@ export async function sendWelcomeEmail(opts: { to: string; name?: string | null 
       'We activate it and email you your TV login.',
       'Install the app on your device and start watching.',
     ], [PLANS_URL, 'See plans']),
-    box('Forgot your password?', `Email {{ADMIN}} and we’ll help you reset it. We’ll never ask for your password by email.`),
+    box('Forgot your account password?', `Email {{ADMIN}} and we’ll help you reset it. We’ll never ask for your password by email.`),
   ])
-  const text = `${first ? `Hi ${first}, your` : 'Your'} ${BRAND} account is ready.\n\nSign in any time with ${opts.to} and the password you chose: ${ACCOUNT_URL}\n\nWhat happens next:\n1. Choose a plan or start your free 24-hour trial: ${PLANS_URL}\n2. We activate it and email you your TV login.\n3. Install the app on your device and start watching.\n\nForgot your password? Email the help address below and we'll help you reset it. We'll never ask for your password by email.`
+  const text = `${first ? `Hi ${first}, your` : 'Your'} ${BRAND} account is ready.\n\nSign in any time with ${opts.to} and the password you chose: ${ACCOUNT_URL}\n\nWhat happens next:\n1. Choose a plan or start your free 24-hour trial: ${PLANS_URL}\n2. We activate it and email you your TV login.\n3. Install the app on your device and start watching.\n\nForgot your account password? Email the help address below and we'll help you reset it. We'll never ask for your password by email.`
   return send(opts.to, `Welcome to ${BRAND}: your account is ready`, html, text)
 }
 
@@ -255,12 +273,16 @@ export async function sendPlanActivatedEmail(opts: {
   renewal: boolean
   trial: boolean
   boxDevice?: string | null
+  // true when the customer typed this password themselves at checkout
+  passwordChosen?: boolean
 }) {
   const first = firstName(opts.name)
   const name = first ? `, ${esc(first)}` : ''
   const kind = opts.boxDevice ? 'box' : opts.renewal ? 'renewal' : opts.trial ? 'trial' : 'plan'
   const expires = isLifetime(opts.expiresAt) ? 'Lifetime' : kind === 'trial' ? dayTime(opts.expiresAt) : day(opts.expiresAt)
   const length = /24/.test(opts.planName) ? '24-hour ' : ''
+  // The password itself is never emailed (see the top of this file)
+  const pwSrc: PasswordSource = kind === 'renewal' ? 'same' : opts.passwordChosen ? 'created' : 'account'
 
   const title = {
     trial: 'Your free trial is ready',
@@ -276,7 +298,7 @@ export async function sendPlanActivatedEmail(opts: {
   }[kind]
   const sub = {
     trial: `Explore live TV, movies, shows, and sports during your ${length}trial.`,
-    plan: `Your ${esc(opts.planName)} is active. Use the details below to sign in on the ${BRAND} app.`,
+    plan: `Your ${esc(opts.planName)} is active. Sign in on the ${BRAND} app with the details below.`,
     renewal: `Your ${esc(opts.planName)} is active. Nothing changes on your TV: keep using the same login.`,
     box: `We’re setting up your <b style="color:#ffffff">${esc(opts.boxDevice)}</b> box with ${BRAND} and will ship it to you soon. It arrives already signed in.`,
   }[kind]
@@ -290,7 +312,7 @@ export async function sendPlanActivatedEmail(opts: {
         ])
       : kind === 'renewal'
         ? ''
-        : startWatching()
+        : startWatching(pwSrc === 'created' ? 'Sign in with your username and the TV app password you created.' : 'Sign in with your username and TV app password.')
 
   const html = shell(
     kind === 'renewal' ? `Your ${BRAND} plan is renewed. Same login, more watching.` : `Your ${BRAND} login is inside. Start watching in minutes.`,
@@ -299,12 +321,12 @@ export async function sendPlanActivatedEmail(opts: {
       greeting(headline, sub),
       details([
         ['Username', opts.username],
-        ['Password', opts.password],
+        ['Password', passwordValue(pwSrc)],
         ['Plan', opts.planName],
         ['Connections', String(opts.connections)],
         ['Expires', expires],
       ]),
-      note('Username and password are case sensitive. Keep them private.'),
+      passwordNote(pwSrc),
       button(ACCOUNT_URL, 'View my account'),
       next ? divider() : '',
       next,
@@ -318,11 +340,78 @@ export async function sendPlanActivatedEmail(opts: {
       ? `\n\nWhat happens next:\n1. We set up your box and sign it in.\n2. We ship it to you.\n3. Plug it into your TV and Wi-Fi, and start watching.`
       : kind === 'renewal'
         ? ''
-        : `\n\nStart watching:\n1. Open the setup guide and pick your device: ${SETUP_URL}\n2. Install the ${BRAND} app.\n3. Sign in with your username and password.`
-  const text = `${plainHead}\n\n${plain(sub)}\n\nUsername: ${opts.username}\nPassword: ${opts.password}\nPlan: ${opts.planName}\nConnections: ${opts.connections}\n${expires ? `Expires: ${expires}\n` : ''}\nUsername and password are case sensitive. Keep them private.\nYour account: ${ACCOUNT_URL}${plainNext}${referText(opts.username)}`
+        : `\n\nStart watching:\n1. Open the setup guide and pick your device: ${SETUP_URL}\n2. Install the ${BRAND} app.\n3. Sign in with your username and TV app password.`
+  const text = `${plainHead}\n\n${plain(sub)}\n\nUsername: ${opts.username}\nPassword: ${passwordValue(pwSrc)}\nPlan: ${opts.planName}\nConnections: ${opts.connections}\n${expires ? `Expires: ${expires}\n` : ''}\n${passwordNoteText(pwSrc)} Username and password are case sensitive.\nYour account: ${ACCOUNT_URL}${plainNext}${referText(opts.username)}`
 
   const subject = kind === 'box' ? `Your ${BRAND} box order is confirmed` : `${title}: your ${BRAND} login`
   return send(opts.to, subject, html, text)
+}
+
+// 2c) Order received: sent right after checkout, before the admin approves it.
+// Confirms the TV username they picked. The password is never emailed.
+export async function sendOrderReceivedEmail(opts: {
+  to: string
+  name?: string | null
+  planName: string
+  kind: 'trial' | 'plan' | 'renewal' | 'box'
+  username: string | null // the TV username they picked (or already have)
+  passwordCreated: boolean // they created a TV password at this checkout
+  amount?: string | null // e.g. "$20"
+  paidWith?: string | null // e.g. "Cash App"
+  boxDevice?: string | null
+}) {
+  const first = firstName(opts.name)
+  const name = first ? `, ${esc(first)}` : ''
+  const { kind } = opts
+  const pwSrc: PasswordSource = opts.passwordCreated ? 'created' : opts.username ? 'same' : 'account'
+
+  const title = {
+    trial: 'Your free trial is almost ready',
+    plan: 'We got your order',
+    renewal: 'We got your renewal',
+    box: 'We got your box order',
+  }[kind]
+  const sub = {
+    trial: 'We’re activating your free trial now. We’ll email you the moment it’s live.',
+    plan: `We’re confirming your payment and activating your ${esc(opts.planName)}. We’ll email you the moment it’s live.`,
+    renewal: `We’re confirming your payment and renewing your ${esc(opts.planName)}. We’ll email you your new expiration date.`,
+    box: `We’re confirming your payment. Then we’ll set up your <b style="color:#ffffff">${esc(opts.boxDevice || '')}</b> box and ship it to you, already signed in.`,
+  }[kind]
+  const status = kind === 'trial' ? 'Being activated' : 'Confirming payment'
+  const payment = opts.amount ? `${opts.amount}${opts.paidWith ? ` via ${opts.paidWith}` : ''}` : null
+
+  const nextItems = {
+    trial: ['We activate your free trial.', 'We email you as soon as it’s live.', `Sign in on the ${BRAND} app and start watching.`],
+    plan: ['We confirm your payment.', 'We activate your plan and email you.', `Sign in on the ${BRAND} app and start watching.`],
+    renewal: ['We confirm your payment.', 'We extend your plan and email you the new date.', 'Nothing to change on your TV.'],
+    box: ['We confirm your payment.', 'We set up your box and ship it to you.', 'Plug it into your TV and Wi-Fi, and start watching.'],
+  }[kind]
+  const getReady = kind === 'trial' || kind === 'plan'
+
+  const html = shell(
+    kind === 'trial' ? 'Your free trial request is in. Here’s what happens next.' : 'Your order is in. Here’s what happens next.',
+    title,
+    [
+      greeting(`Thanks${name}!`, sub),
+      details([
+        ['Plan', opts.planName],
+        ['Payment', payment],
+        ['Username', opts.username],
+        ['Password', opts.username ? passwordValue(pwSrc) : null],
+        ['Status', status],
+      ]),
+      opts.username ? passwordNote(pwSrc) : '',
+      getReady
+        ? row(t(`<p style="margin:0;font-size:16px;line-height:1.5;color:${SOFT};text-align:center"><b style="color:#ffffff">Get ready while you wait:</b> install the ${BRAND} app now, so you can sign in as soon as you get our next email.</p>`), '24px 32px 0', 'center')
+        : '',
+      button(getReady ? SETUP_URL : ACCOUNT_URL, getReady ? 'Open the setup guide' : 'View my account'),
+      divider(),
+      steps('What happens next', nextItems),
+    ],
+  )
+
+  const text = `Thanks${first ? `, ${first}` : ''}!\n\n${title}. ${plain(sub)}\n\nPlan: ${opts.planName}\n${payment ? `Payment: ${payment}\n` : ''}${opts.username ? `Username: ${opts.username}\nPassword: ${passwordValue(pwSrc)}\n` : ''}Status: ${status}\n${opts.username ? `\n${passwordNoteText(pwSrc)} Username and password are case sensitive.\n` : ''}${getReady ? `\nGet ready while you wait: install the ${BRAND} app now: ${SETUP_URL}\n` : ''}\nWhat happens next:\n${nextItems.map((s, i) => `${i + 1}. ${s.replace(/’/g, "'")}`).join('\n')}\n\nYour account: ${ACCOUNT_URL}`
+  return send(opts.to, kind === 'trial' ? `We got your free trial request (${BRAND})` : `We got your order (${BRAND})`, html, text)
 }
 
 // 3) Renewal done by admin, or a free month added
