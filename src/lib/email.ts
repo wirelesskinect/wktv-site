@@ -1,17 +1,36 @@
 // Customer emails, sent through Resend (https://resend.com) from a no-reply @wktv.live address.
 // Server-only. Settings (Vercel → Settings → Environment Variables):
-//   RESEND_API_KEY  – API key from Resend (required to turn emails on)
-//   EMAIL_FROM      – no-reply sender, e.g. "WKTV <no-reply@wktv.live>" (domain verified in Resend)
-//   ADMIN_EMAIL     – the admin email customers should contact (shown in every email).
-//                     If not set, the email of the admin account on the website is used.
+//   RESEND_API_KEY – API key from Resend (required to turn emails on)
+//   EMAIL_FROM     – no-reply sender, e.g. "WKTV <no-reply@wktv.live>" (domain verified in Resend)
+//   ADMIN_EMAIL    – the admin email customers should contact (shown in every email).
+//                    If not set, the email of the admin account on the website is used.
 // Emails say "don't reply" and point customers to the admin email only.
 // If the settings are missing, nothing is sent and the website keeps working normally.
+//
+// Design: black cinematic look with the WKTV banner (public/email/trial-header.jpg).
+// Gmail's iPhone app "inverts" dark emails in dark mode (black turns light grey, white text turns black).
+// To stop that, every background also uses a background-image gradient (Gmail never inverts images)
+// and every piece of text is wrapped in t() (two blend-mode layers that flip Gmail's inversion back).
+// Other email apps ignore the blend layers.
 
 import { adminSupabase } from '@/lib/supabase-server'
+import { referralLink } from '@/lib/referral'
 
 const SITE_URL = 'https://www.wktv.live'
 const BRAND = 'WKTV'
-const RED = '#ee302f'
+const HEADER_IMG = `${SITE_URL}/email/trial-header.jpg`
+const SETUP_URL = `${SITE_URL}/support.html#connect`
+const ACCOUNT_URL = `${SITE_URL}/dashboard`
+const PLANS_URL = `${SITE_URL}/#plans`
+
+// Colors
+const BG = '#000000'
+const CARD = '#1c1c1f'
+const LINE = '#34343a'
+const SOFT = '#e5e5ea'
+const MUTED = '#a1a1aa'
+const RED = '#e30613'
+const FONT = `font-family:'Montserrat',Arial,Helvetica,sans-serif`
 
 export function emailConfigured(): boolean {
   return !!(process.env.RESEND_API_KEY && process.env.EMAIL_FROM)
@@ -24,6 +43,13 @@ function esc(value: unknown): string {
 
 const day = (d: Date | null) =>
   d ? d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' }) : null
+const dayTime = (d: Date | null) =>
+  d ? `${day(d)} at ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' })} ET` : null
+const isLifetime = (d: Date | null) => !!d && d.getFullYear() - new Date().getFullYear() > 50
+// HTML snippet → plain text (for the text version of each email)
+const plain = (html: string) =>
+  html.replace(/<[^>]+>/g, '').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/’/g, "'")
+const firstName = (name?: string | null) => (name || '').trim().split(/\s+/)[0] || ''
 
 // The admin email on file: ADMIN_EMAIL, or the website's admin account
 let adminEmailCache: string | null = null
@@ -47,7 +73,7 @@ async function send(to: string, subject: string, bodyHtml: string, bodyText: str
   }
   if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return false
   const admin = await adminContact()
-  const html = bodyHtml.replace('{{FOOTER}}', footerHtml(admin)).replace('{{HELP}}', helpHtml(admin))
+  const html = bodyHtml.replace('{{HELP}}', helpHtml(admin)).split('{{ADMIN}}').join(adminLinkHtml(admin))
   const text = `${bodyText}\n\n---\n${footerText(admin)}`
   try {
     const res = await fetch('https://api.resend.com/emails', {
@@ -73,65 +99,151 @@ async function send(to: string, subject: string, bodyHtml: string, bodyText: str
   }
 }
 
-// Shared look: black background, white text, WKTV red accents
-function layout(title: string, bodyHtml: string): string {
-  return `<!doctype html><html><body style="margin:0;padding:0;background:#0b0b0d;font-family:Arial,Helvetica,sans-serif;color:#ffffff">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0b0b0d;padding:24px 12px">
-<tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#16161a;border:1px solid #2a2a30;border-radius:14px">
-<tr><td style="padding:22px 26px;border-bottom:3px solid ${RED}">
-<span style="font-size:24px;font-weight:800;letter-spacing:1px;color:#ffffff">WK<span style="color:${RED}">TV</span></span>
-</td></tr>
-<tr><td style="padding:26px">
-<h1 style="margin:0 0 14px;font-size:22px;color:#ffffff">${esc(title)}</h1>
-${bodyHtml}
-{{FOOTER}}
-</td></tr>
+// ---------- Building blocks ----------
+
+// Background that Gmail's dark mode can't flip
+const bg = (c: string) => `background-color:${c};background-image:linear-gradient(${c},${c});`
+// Text that Gmail's dark mode can't flip
+const t = (html: string) => `<div class="gs"><div class="gd">${html}</div></div>`
+
+function adminLinkHtml(admin: string): string {
+  return admin
+    ? `<a href="mailto:${esc(admin)}" style="color:#ffffff;text-decoration:underline">${esc(admin)}</a>`
+    : `<a href="${SITE_URL}/support" style="color:#ffffff;text-decoration:underline">wktv.live/support</a>`
+}
+
+function helpHtml(admin: string): string {
+  return t(`<p style="margin:0 0 6px;font-size:15px;line-height:1.5;color:${SOFT}">Need help? ${adminLinkHtml(admin)}</p>
+<p style="margin:0 0 18px;font-size:15px"><a href="${SITE_URL}" style="color:#ffffff;text-decoration:underline">wktv.live</a></p>
+<p style="margin:0;font-size:12px;line-height:1.5;color:${MUTED}">This is a no-reply email. Replies to this address are not read.</p>`)
+}
+function footerText(admin: string): string {
+  return `Need help? ${admin ? `Email ${admin}` : `Visit ${SITE_URL}/support`}\nwktv.live\nThis is a no-reply email. Replies to this address are not read.`
+}
+
+// Full email: banner, big title, then the sections
+function shell(preheader: string, title: string, sections: string[]): string {
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark"><meta name="supported-color-schemes" content="dark">
+<style>
+u + .body .gs, u + #body .gs { background:#000; mix-blend-mode:screen; }
+u + .body .gd, u + #body .gd { background:#000; mix-blend-mode:difference; }
+@media (max-width:480px) { .px { padding-left:20px !important; padding-right:20px !important; } .h1 { font-size:30px !important; } }
+</style></head>
+<body class="body" id="body" style="margin:0;padding:0;${bg(BG)}${FONT};color:#ffffff">
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all">${esc(preheader)}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="${bg(BG)}">
+<tr><td align="center" style="padding:0">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;${bg(BG)}">
+<tr><td style="padding:0"><a href="${SITE_URL}"><img src="${HEADER_IMG}" width="600" alt="${BRAND} · Watch Anywhere" style="display:block;width:100%;max-width:600px;height:auto;border:0;color:#ffffff;font-size:24px;font-weight:800;text-align:center"></a></td></tr>
+<tr><td align="center" class="px" style="padding:6px 24px 0">${t(`<h1 class="h1" style="margin:0;font-size:36px;line-height:1.15;font-weight:800;color:#ffffff;letter-spacing:-0.5px">${esc(title)}</h1>`)}</td></tr>
+${sections.join('\n')}
+<tr><td align="center" class="px" style="padding:32px 24px 36px">{{HELP}}</td></tr>
 </table>
 </td></tr></table></body></html>`
 }
 
-// Every email ends with: no-reply notice + the admin email to contact
-function footerHtml(admin: string): string {
-  const contact = admin
-    ? `please email <a href="mailto:${esc(admin)}" style="color:${RED}">${esc(admin)}</a> only`
-    : `please use <a href="${SITE_URL}/support" style="color:${RED}">${SITE_URL.replace('https://', '')}/support</a>`
-  return `<div style="margin:26px 0 0;padding:14px;border-top:1px solid #2a2a30;font-size:13px;line-height:1.5;color:#9a9aa6">
-<b style="color:#e5e5ea">This is a no-reply email.</b> Replies to this address are not read.<br>
-For help with your account, ${contact}.
-</div>`
-}
-function footerText(admin: string): string {
-  return `This is a no-reply email. Replies to this address are not read.\nFor help with your account, ${admin ? `please email ${admin} only` : `please use ${SITE_URL}/support`}.`
+const row = (html: string, pad = '20px 40px 0', align = 'left') =>
+  `<tr><td class="px" align="${align}" style="padding:${pad}">${html}</td></tr>`
+
+// "Welcome to WKTV, Alex." + one friendly line
+function greeting(headline: string, sub: string): string {
+  return row(t(`<p style="margin:0 0 4px;font-size:20px;line-height:1.3;font-weight:800;color:#ffffff">${headline}</p>
+<p style="margin:0;font-size:16px;line-height:1.5;color:${SOFT}">${sub}</p>`), '18px 40px 0')
 }
 
-const p = (html: string) => `<p style="margin:0 0 12px;font-size:15px;line-height:1.5;color:#e5e5ea">${html}</p>`
-const button = (href: string, label: string) =>
-  `<p style="margin:20px 0"><a href="${href}" style="display:inline-block;background:${RED};color:#ffffff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:10px">${esc(label)}</a></p>`
-function detailRows(rows: [string, string | null | undefined][]): string {
-  const cells = rows
-    .filter(([, v]) => v)
-    .map(([k, v]) => `<tr><td style="padding:8px 12px;color:#9a9aa6;font-size:14px;white-space:nowrap">${esc(k)}</td><td style="padding:8px 12px;font-size:16px;font-weight:700;color:#ffffff;font-family:Menlo,Consolas,monospace">${esc(v)}</td></tr>`)
+// Rounded grey card with label / value rows
+function details(rows: [string, string | null | undefined][]): string {
+  const list = rows.filter(([, v]) => v) as [string, string][]
+  const body = list
+    .map(([k, v], i) => {
+      const sep = i < list.length - 1 ? `<tr><td colspan="2" style="height:1px;padding:0;font-size:0;line-height:0;${bg(LINE)}">&nbsp;</td></tr>` : ''
+      return `<tr><td valign="top" style="padding:13px 12px 13px 0;width:36%">${t(`<span style="font-size:16px;color:${SOFT}">${esc(k)}</span>`)}</td><td valign="top" style="padding:13px 0">${t(`<span style="font-size:17px;font-weight:700;color:#ffffff;overflow-wrap:anywhere;word-break:break-word">${esc(v)}</span>`)}</td></tr>${sep}`
+    })
     .join('')
-  return `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:#0b0b0d;border:1px solid #2a2a30;border-radius:10px;margin:6px 0 14px">${cells}</table>`
+  return row(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="${bg(CARD)}border-radius:14px">
+<tr><td style="padding:8px 24px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${body}</table></td></tr></table>`, '20px 28px 0')
 }
+
+const note = (html: string) =>
+  row(t(`<p style="margin:0;font-size:14px;line-height:1.5;color:${SOFT};text-align:center">${html}</p>`), '16px 32px 0', 'center')
+
+function button(href: string, label: string): string {
+  return row(`<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto"><tr><td align="center" style="${bg(RED)}border-radius:10px">
+<a href="${href}" style="display:block;min-width:220px;padding:15px 36px;color:#ffffff;text-decoration:none;font-weight:800;font-size:18px;text-align:center">${t(esc(label))}</a>
+</td></tr></table>`, '20px 24px 0', 'center')
+}
+
+const divider = () =>
+  row(`<div style="height:1px;font-size:0;line-height:0;${bg('#5a5a60')}">&nbsp;</div>`, '30px 40px 0')
+
+// Numbered steps with an optional link under them
+function steps(title: string, items: string[], link?: [string, string]): string {
+  const list = items
+    .map((text, i) => `<tr><td width="44" valign="middle" style="padding:6px 12px 6px 0"><div style="width:32px;height:32px;line-height:32px;border-radius:16px;${bg('#2a2a30')}text-align:center">${t(`<span style="color:#ffffff;font-weight:700;font-size:15px">${i + 1}</span>`)}</div></td><td valign="middle" style="padding:6px 0">${t(`<span style="font-size:16px;line-height:1.4;color:#ffffff">${text}</span>`)}</td></tr>`)
+    .join('')
+  const more = link ? t(`<p style="margin:12px 0 0;font-size:16px;text-align:center"><a href="${link[0]}" style="color:#ffffff;text-decoration:underline">${esc(link[1])}</a></p>`) : ''
+  return row(`${t(`<h2 style="margin:0 0 12px;font-size:26px;font-weight:800;color:#ffffff;text-align:center">${esc(title)}</h2>`)}
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto">${list}</table>${more}`, '26px 24px 0', 'center')
+}
+
+// Grey box with a title, text and an optional extra (link, code box…)
+function box(title: string, textHtml: string, extraHtml = ''): string {
+  return row(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="${bg(CARD)}border-radius:14px">
+<tr><td align="center" style="padding:24px 26px">
+${t(`<h2 style="margin:0 0 10px;font-size:24px;font-weight:800;color:#ffffff">${esc(title)}</h2>
+<p style="margin:0;font-size:16px;line-height:1.5;color:${SOFT}">${textHtml}</p>`)}${extraHtml}
+</td></tr></table>`, '28px 20px 0')
+}
+
+// Refer a friend, with the customer's own link right in the email
+function referBox(username: string | null | undefined): string {
+  if (!username) return ''
+  const link = referralLink(username)
+  const shown = link.replace('https://www.', '')
+  return box(
+    'Refer a friend',
+    'Share your personal link with friends and family. They get a free 24-hour trial, and when they buy a 1-year plan, you get <b style="color:#ffffff">1 free month</b>.',
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0 0;${bg('#2a2a30')}border-radius:10px"><tr><td align="center" style="padding:12px 14px">${t(`<a href="${esc(link)}" style="color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;overflow-wrap:anywhere">${esc(shown).replace('&amp;ref=', '&amp;<wbr>ref=')}</a>`)}</td></tr></table>
+${t(`<p style="margin:12px 0 0;font-size:14px;line-height:1.5;color:${MUTED}">Friends can also type your username <b style="color:#ffffff">${esc(username)}</b> in the referral box when they sign up.</p>`)}`,
+  )
+}
+
+function referText(username: string | null | undefined): string {
+  return username
+    ? `\n\nRefer a friend: share your link ${referralLink(username)}. They get a free 24-hour trial, and when they buy a 1-year plan, you get 1 free month.`
+    : ''
+}
+
+const startWatching = () =>
+  steps('Start watching', [
+    'Open the setup guide and pick your device.',
+    `Install the ${BRAND} app (it takes a few minutes).`,
+    'Sign in with your username and password above.',
+  ], [SETUP_URL, 'View device setup guide'])
+
+// ---------- The emails ----------
 
 // 1) Welcome email after a website account is created. The website password is never emailed.
 export async function sendWelcomeEmail(opts: { to: string; name?: string | null }) {
-  const hi = opts.name ? `Hi ${esc(opts.name)},` : 'Hi,'
-  const html = layout(`Welcome to ${BRAND}`, [
-    p(hi),
-    p(`Your ${BRAND} account is ready. Sign in any time with this email address and the password you chose.`),
-    detailRows([['Login email', opts.to]]),
-    p('Your TV app username and password will be emailed to you as soon as your plan is activated. You can also see them on your account page.'),
-    button(`${SITE_URL}/dashboard`, 'Go to my account'),
-    p('<span style="font-size:13px;color:#9a9aa6">Forgot your password? Email the admin address below and we’ll help you reset it. We’ll never ask for your password by email.</span>'),
-  ].join(''))
-  const text = `${opts.name ? `Hi ${opts.name},` : 'Hi,'}\n\nYour ${BRAND} account is ready. Sign in with ${opts.to} and the password you chose.\n\nYour TV app username and password will be emailed as soon as your plan is activated, and are always on your account page: ${SITE_URL}/dashboard`
+  const first = firstName(opts.name)
+  const html = shell(`Your ${BRAND} account is ready. Here's what happens next.`, `Welcome to ${BRAND}`, [
+    greeting(first ? `Hi ${esc(first)}, your account is ready.` : 'Your account is ready.', 'Sign in any time with this email address and the password you chose.'),
+    details([['Login email', opts.to]]),
+    button(ACCOUNT_URL, 'Go to my account'),
+    divider(),
+    steps('What happens next', [
+      'Choose a plan or start your free 24-hour trial.',
+      'We activate it and email you your TV login.',
+      'Install the app on your device and start watching.',
+    ], [PLANS_URL, 'See plans']),
+    box('Forgot your password?', `Email {{ADMIN}} and we’ll help you reset it. We’ll never ask for your password by email.`),
+  ])
+  const text = `${first ? `Hi ${first}, your` : 'Your'} ${BRAND} account is ready.\n\nSign in any time with ${opts.to} and the password you chose: ${ACCOUNT_URL}\n\nWhat happens next:\n1. Choose a plan or start your free 24-hour trial: ${PLANS_URL}\n2. We activate it and email you your TV login.\n3. Install the app on your device and start watching.\n\nForgot your password? Email the help address below and we'll help you reset it. We'll never ask for your password by email.`
   return send(opts.to, `Welcome to ${BRAND}: your account is ready`, html, text)
 }
 
-// 2) Plan activated: TV app login details
+// 2) Plan activated: TV app login details (free trial, paid plan, renewal, or box order)
 export async function sendPlanActivatedEmail(opts: {
   to: string
   name?: string | null
@@ -144,130 +256,73 @@ export async function sendPlanActivatedEmail(opts: {
   trial: boolean
   boxDevice?: string | null
 }) {
-  // Free trials get their own full-width design (see sendTrialEmail below)
-  if (opts.trial && !opts.renewal && !opts.boxDevice) return sendTrialEmail(opts)
-  const hi = opts.name ? `Hi ${esc(opts.name)},` : 'Hi,'
-  const lifetime = !!opts.expiresAt && opts.expiresAt.getFullYear() - new Date().getFullYear() > 50
-  const expires = lifetime ? 'Lifetime' : day(opts.expiresAt)
-  const title = opts.renewal ? 'Your plan has been renewed' : opts.trial ? 'Your free trial is ready' : 'Your plan is active'
-  const intro = opts.renewal
-    ? `Thanks for renewing! Your ${esc(opts.planName)} is active. Your TV app login stays the same.`
-    : opts.trial
-      ? 'Your WKTV trial is active. Enter these details in the WKTV / IPTV app to start watching.'
-      : `Thanks for your order! Your ${esc(opts.planName)} is active. Enter these details in the WKTV / IPTV app to start watching.`
-  const box = opts.boxDevice
-    ? p(`We’re setting up your <b>${esc(opts.boxDevice)}</b> box with WKTV and will ship it to you soon. It will arrive already signed in.`)
-    : ''
-  const html = layout(title, [
-    p(hi),
-    p(intro),
-    detailRows([
-      ['Username', opts.username],
-      ['Password', opts.password],
-      ['Plan', opts.planName],
-      ['Connections', String(opts.connections)],
-      ['Expires', expires],
-    ]),
-    box,
-    p('Keep this email private. Your username and password are also on your account page any time.'),
-    button(`${SITE_URL}/dashboard`, 'View my account'),
-    p(`Need help installing the app? <a href="${SITE_URL}/support.html#connect" style="color:${RED}">See the setup guide</a>.`),
-  ].join(''))
-  const text = `${opts.name ? `Hi ${opts.name},` : 'Hi,'}\n\n${title}.\n\nUsername: ${opts.username}\nPassword: ${opts.password}\nPlan: ${opts.planName}\nConnections: ${opts.connections}\n${expires ? `Expires: ${expires}\n` : ''}${opts.boxDevice ? `\nWe're setting up your ${opts.boxDevice} box and will ship it soon.\n` : ''}\nYour login is also on your account page: ${SITE_URL}/dashboard\nSetup guide: ${SITE_URL}/support.html#connect`
-  return send(opts.to, `${title}: your ${BRAND} login`, html, text)
-}
-
-// 2b) Free trial ready: cinematic banner, login details, setup steps, refer-a-friend
-// Banner image: public/email/trial-header.jpg (served from www.wktv.live)
-const TRIAL_HEADER_IMG = `${SITE_URL}/email/trial-header.jpg`
-
-function helpHtml(admin: string): string {
-  const contact = admin
-    ? `<a href="mailto:${esc(admin)}" style="color:#ffffff;text-decoration:none">${esc(admin)}</a>`
-    : `<a href="${SITE_URL}/support" style="color:#ffffff;text-decoration:none">${SITE_URL.replace('https://www.', '')}/support</a>`
-  return `<p style="margin:0 0 6px;font-size:15px;line-height:1.5;color:#e5e5ea">Need help? ${contact}</p>
-<p style="margin:0 0 18px;font-size:15px"><a href="${SITE_URL}" style="color:#ffffff;text-decoration:underline">wktv.live</a></p>
-<p style="margin:0;font-size:12px;line-height:1.5;color:#77777f">This is a no-reply email. Replies to this address are not read.</p>`
-}
-
-async function sendTrialEmail(opts: {
-  to: string
-  name?: string | null
-  planName: string
-  connections: number
-  username: string
-  password: string
-  expiresAt: Date | null
-}) {
-  const first = (opts.name || '').trim().split(/\s+/)[0] || ''
-  const welcome = first ? `Welcome to ${BRAND}, ${esc(first)}.` : `Welcome to ${BRAND}.`
+  const first = firstName(opts.name)
+  const name = first ? `, ${esc(first)}` : ''
+  const kind = opts.boxDevice ? 'box' : opts.renewal ? 'renewal' : opts.trial ? 'trial' : 'plan'
+  const expires = isLifetime(opts.expiresAt) ? 'Lifetime' : kind === 'trial' ? dayTime(opts.expiresAt) : day(opts.expiresAt)
   const length = /24/.test(opts.planName) ? '24-hour ' : ''
-  const expires = day(opts.expiresAt)
-  const font = `font-family:'Montserrat',Arial,Helvetica,sans-serif`
 
-  const row = (label: string, value: string | null | undefined, last = false) =>
-    value
-      ? `<tr><td style="padding:12px 0;${last ? '' : 'border-bottom:1px solid #3a3a40;'}font-size:16px;color:#e5e5ea">${esc(label)}</td><td style="padding:12px 0 12px 12px;${last ? '' : 'border-bottom:1px solid #3a3a40;'}font-size:16px;font-weight:700;color:#ffffff;word-break:break-all">${esc(value)}</td></tr>`
-      : ''
-  const rows = [
-    ['Username', opts.username],
-    ['Password', opts.password],
-    ['Plan', opts.planName],
-    ['Connections', String(opts.connections)],
-    ['Expires', expires],
-  ].filter(([, v]) => v) as [string, string][]
-  const details = rows.map(([k, v], i) => row(k, v, i === rows.length - 1)).join('')
+  const title = {
+    trial: 'Your free trial is ready',
+    plan: 'Your plan is active',
+    renewal: 'Your plan has been renewed',
+    box: 'Your box order is confirmed',
+  }[kind]
+  const headline = {
+    trial: `Welcome to ${BRAND}${name}.`,
+    plan: `Thanks for your order${name}!`,
+    renewal: `Thanks for renewing${name}!`,
+    box: `Thanks for your order${name}!`,
+  }[kind]
+  const sub = {
+    trial: `Explore live TV, movies, shows, and sports during your ${length}trial.`,
+    plan: `Your ${esc(opts.planName)} is active. Use the details below to sign in on the ${BRAND} app.`,
+    renewal: `Your ${esc(opts.planName)} is active. Nothing changes on your TV: keep using the same login.`,
+    box: `We’re setting up your <b style="color:#ffffff">${esc(opts.boxDevice)}</b> box with ${BRAND} and will ship it to you soon. It arrives already signed in.`,
+  }[kind]
 
-  const step = (n: number, text: string) =>
-    `<tr><td width="36" valign="middle" style="padding:6px 12px 6px 0"><div style="width:32px;height:32px;line-height:32px;border-radius:16px;background:#2a2a30;color:#ffffff;font-weight:700;font-size:15px;text-align:center">${n}</div></td><td valign="middle" style="padding:6px 0;font-size:16px;line-height:1.4;color:#ffffff">${text}</td></tr>`
+  const next =
+    kind === 'box'
+      ? steps('What happens next', [
+          `We set up your box and sign it in to ${BRAND}.`,
+          'We ship it to you.',
+          'Plug it into your TV and Wi-Fi, and start watching.',
+        ])
+      : kind === 'renewal'
+        ? ''
+        : startWatching()
 
-  const html = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><meta name="supported-color-schemes" content="dark"></head>
-<body style="margin:0;padding:0;background:#000000;${font};color:#ffffff">
-<div style="display:none;max-height:0;overflow:hidden">Your ${BRAND} login is inside. Start watching in minutes.</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#000000">
-<tr><td align="center" style="padding:0">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px">
-<tr><td style="padding:0"><a href="${SITE_URL}"><img src="${TRIAL_HEADER_IMG}" width="600" alt="${BRAND} · Watch Anywhere" style="display:block;width:100%;max-width:600px;height:auto;border:0;color:#ffffff;font-size:24px;font-weight:800;text-align:center"></a></td></tr>
-<tr><td align="center" style="padding:6px 24px 0">
-<h1 style="margin:0;font-size:36px;line-height:1.15;font-weight:800;color:#ffffff;letter-spacing:-0.5px">Your free trial is ready</h1>
-</td></tr>
-<tr><td style="padding:18px 40px 0">
-<p style="margin:0 0 4px;font-size:20px;font-weight:800;color:#ffffff">${welcome}</p>
-<p style="margin:0;font-size:16px;line-height:1.45;color:#e5e5ea">Explore live TV, movies, shows, and sports during your ${length}trial.</p>
-</td></tr>
-<tr><td style="padding:20px 28px 0">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#1c1c1f;border-radius:14px">
-<tr><td style="padding:10px 26px">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${details}</table>
-</td></tr></table>
-</td></tr>
-<tr><td align="center" style="padding:18px 24px 0;font-size:14px;color:#e5e5ea">Keep your sign-in details private.</td></tr>
-<tr><td align="center" style="padding:20px 24px 0">
-<a href="${SITE_URL}/dashboard" style="display:inline-block;min-width:240px;background:#e30613;color:#ffffff;text-decoration:none;font-weight:800;font-size:18px;padding:15px 36px;border-radius:10px;text-align:center">View my account</a>
-</td></tr>
-<tr><td style="padding:30px 40px 0"><div style="border-top:1px solid #ffffff;opacity:0.6;font-size:0;line-height:0">&nbsp;</div></td></tr>
-<tr><td align="center" style="padding:26px 24px 0">
-<h2 style="margin:0 0 12px;font-size:26px;font-weight:800;color:#ffffff">Start watching</h2>
-<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;text-align:left">
-${step(1, 'Open the setup guide for your device.')}
-${step(2, `Sign in with your ${BRAND} trial details.`)}
-</table>
-<p style="margin:12px 0 0;font-size:16px"><a href="${SITE_URL}/support.html#connect" style="color:#ffffff;text-decoration:underline">View device setup guide</a></p>
-</td></tr>
-<tr><td style="padding:28px 20px 0">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#1c1c1f;border-radius:14px">
-<tr><td align="center" style="padding:24px 26px">
-<h2 style="margin:0 0 10px;font-size:26px;font-weight:800;color:#ffffff">Refer a friend</h2>
-<p style="margin:0 0 12px;font-size:16px;line-height:1.45;color:#e5e5ea">Share your personal link with friends and family to earn referral rewards.</p>
-<p style="margin:0;font-size:16px;font-weight:700"><a href="${SITE_URL}/dashboard" style="color:#ffffff;text-decoration:underline">Find my referral link</a></p>
-</td></tr></table>
-</td></tr>
-<tr><td align="center" style="padding:30px 24px 36px">{{HELP}}</td></tr>
-</table>
-</td></tr></table></body></html>`
+  const html = shell(
+    kind === 'renewal' ? `Your ${BRAND} plan is renewed. Same login, more watching.` : `Your ${BRAND} login is inside. Start watching in minutes.`,
+    title,
+    [
+      greeting(headline, sub),
+      details([
+        ['Username', opts.username],
+        ['Password', opts.password],
+        ['Plan', opts.planName],
+        ['Connections', String(opts.connections)],
+        ['Expires', expires],
+      ]),
+      note('Username and password are case sensitive. Keep them private.'),
+      button(ACCOUNT_URL, 'View my account'),
+      next ? divider() : '',
+      next,
+      referBox(opts.username),
+    ],
+  )
 
-  const text = `${first ? `Welcome to ${BRAND}, ${first}.` : `Welcome to ${BRAND}.`}\n\nYour free trial is ready. Explore live TV, movies, shows, and sports during your ${length}trial.\n\nUsername: ${opts.username}\nPassword: ${opts.password}\nPlan: ${opts.planName}\nConnections: ${opts.connections}\n${expires ? `Expires: ${expires}\n` : ''}\nKeep your sign-in details private.\nView my account: ${SITE_URL}/dashboard\n\nStart watching:\n1. Open the setup guide for your device: ${SITE_URL}/support.html#connect\n2. Sign in with your ${BRAND} trial details.\n\nRefer a friend: share your personal link with friends and family to earn referral rewards. Find your link at ${SITE_URL}/dashboard`
-  return send(opts.to, `Your free trial is ready: your ${BRAND} login`, html, text)
+  const plainHead = { trial: `Welcome to ${BRAND}${first ? `, ${first}` : ''}.`, plan: `Thanks for your order${first ? `, ${first}` : ''}!`, renewal: `Thanks for renewing${first ? `, ${first}` : ''}!`, box: `Thanks for your order${first ? `, ${first}` : ''}!` }[kind]
+  const plainNext =
+    kind === 'box'
+      ? `\n\nWhat happens next:\n1. We set up your box and sign it in.\n2. We ship it to you.\n3. Plug it into your TV and Wi-Fi, and start watching.`
+      : kind === 'renewal'
+        ? ''
+        : `\n\nStart watching:\n1. Open the setup guide and pick your device: ${SETUP_URL}\n2. Install the ${BRAND} app.\n3. Sign in with your username and password.`
+  const text = `${plainHead}\n\n${plain(sub)}\n\nUsername: ${opts.username}\nPassword: ${opts.password}\nPlan: ${opts.planName}\nConnections: ${opts.connections}\n${expires ? `Expires: ${expires}\n` : ''}\nUsername and password are case sensitive. Keep them private.\nYour account: ${ACCOUNT_URL}${plainNext}${referText(opts.username)}`
+
+  const subject = kind === 'box' ? `Your ${BRAND} box order is confirmed` : `${title}: your ${BRAND} login`
+  return send(opts.to, subject, html, text)
 }
 
 // 3) Renewal done by admin, or a free month added
@@ -279,21 +334,25 @@ export async function sendExtendedEmail(opts: {
   reason: 'renewal' | 'referral' | 'free'
   planName?: string | null
 }) {
-  const hi = opts.name ? `Hi ${esc(opts.name)},` : 'Hi,'
-  const title = opts.reason === 'renewal' ? 'Your plan has been renewed' : 'You got a free month!'
-  const intro = opts.reason === 'renewal'
-    ? `Thanks for renewing${opts.planName ? ` your ${esc(opts.planName)}` : ''}! Your service has been extended.`
+  const first = firstName(opts.name)
+  const name = first ? `, ${esc(first)}` : ''
+  const title = opts.reason === 'renewal' ? 'Your plan has been renewed' : opts.reason === 'referral' ? 'You earned a free month!' : 'You got a free month!'
+  const headline = opts.reason === 'renewal' ? `Thanks for renewing${name}!` : opts.reason === 'referral' ? `Thank you${name}!` : `Good news${name}!`
+  const sub = opts.reason === 'renewal'
+    ? `${opts.planName ? `Your ${esc(opts.planName)} is` : 'Your service is'} extended.`
     : opts.reason === 'referral'
-      ? 'Thanks for referring a friend to WKTV! We added <b>1 free month</b> to your service.'
-      : 'We added <b>1 free month</b> to your WKTV service.'
-  const html = layout(title, [
-    p(hi),
-    p(intro),
-    detailRows([['TV username', opts.username], ['New expiration', day(opts.expiresAt)]]),
-    p('Nothing to change on your TV: keep using the same username and password.'),
-    button(`${SITE_URL}/dashboard`, 'View my account'),
-  ].join(''))
-  const exp = day(opts.expiresAt)
-  const text = `${opts.name ? `Hi ${opts.name},` : 'Hi,'}\n\n${title}\n\nTV username: ${opts.username}\n${exp ? `New expiration: ${exp}\n` : ''}\nKeep using the same username and password.\nYour account: ${SITE_URL}/dashboard`
+      ? `A friend you referred joined ${BRAND}, so we added <b style="color:#ffffff">1 free month</b> to your service.`
+      : `We added <b style="color:#ffffff">1 free month</b> to your ${BRAND} service.`
+  const expires = isLifetime(opts.expiresAt) ? 'Lifetime' : day(opts.expiresAt)
+
+  const html = shell(`${title} New expiration: ${expires || 'see your account'}.`, title, [
+    greeting(headline, sub),
+    details([['TV username', opts.username], ['New expiration', expires]]),
+    note('Nothing to change on your TV. Keep using the same username and password.'),
+    button(ACCOUNT_URL, 'View my account'),
+    referBox(opts.username),
+  ])
+  const plainHead = opts.reason === 'renewal' ? `Thanks for renewing${first ? `, ${first}` : ''}!` : opts.reason === 'referral' ? `Thank you${first ? `, ${first}` : ''}!` : `Good news${first ? `, ${first}` : ''}!`
+  const text = `${plainHead}\n\n${plain(sub)}\n\nTV username: ${opts.username}\n${expires ? `New expiration: ${expires}\n` : ''}\nNothing to change on your TV. Keep using the same username and password.\nYour account: ${ACCOUNT_URL}${referText(opts.username)}`
   return send(opts.to, `${title} (${BRAND})`, html, text)
 }
