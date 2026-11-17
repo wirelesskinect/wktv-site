@@ -6,6 +6,7 @@ import { getPlan, paymentNoteCode, PAYMENT_METHODS, PAYMENT_METHOD_LABELS, type 
 import { normalizeUsername, usernameError, passwordError } from '@/lib/iptv-login'
 import { isTrialDevice } from '@/lib/devices'
 import { US_STATES } from '@/lib/shipping'
+import { sendOrderReceivedEmail } from '@/lib/email'
 
 export const dynamic = 'force-dynamic'
 
@@ -261,6 +262,19 @@ export async function POST(request: NextRequest) {
         (referrer ? `\nReferred by: ${referrer.username}` : '') +
         (userPhone ? `\nPhone: ${userPhone}` : '')
     )
+
+    // Confirmation email to the customer (never includes the password; a failure doesn't block the order)
+    await sendOrderReceivedEmail({
+      to: userEmail,
+      name: user.name || null,
+      planName: plan.name,
+      kind: isFreeTrial ? 'trial' : shipTo ? 'box' : hasLine ? 'renewal' : 'plan',
+      username: requestedUsername || existingSub?.[0]?.iptv_username || null,
+      passwordCreated: !!requestedPassword,
+      amount: isFreeTrial ? null : `$${plan.price}`,
+      paidWith: isFreeTrial ? null : methodLabel,
+      boxDevice: shipTo ? plan.device || null : null,
+    })
 
     return NextResponse.json({
       success: true,
