@@ -6,6 +6,7 @@ import { getPlan, paymentNoteCode, PAYMENT_METHODS, PAYMENT_METHOD_LABELS, type 
 import { normalizeUsername, usernameError, passwordError } from '@/lib/iptv-login'
 import { isTrialDevice } from '@/lib/devices'
 import { US_STATES } from '@/lib/shipping'
+import { applyPromo, normalizePromo } from '@/lib/promo'
 
 export const dynamic = 'force-dynamic'
 
@@ -189,7 +190,17 @@ export async function POST(request: NextRequest) {
       referrer = { userId: match.user_id, username: match.iptv_username }
     }
 
-    const amountCents = plan.price * 100
+    // Promo code (checked here on the server; the browser never sets the price)
+    let promo: { code: string; label: string; discount: number; price: number } | null = null
+    if (!isFreeTrial && normalizePromo(body?.promoCode)) {
+      const result = applyPromo(plan, body.promoCode)
+      if (!result.ok) return NextResponse.json({ error: result.error, field: 'promo' }, { status: 400 })
+      promo = result
+    }
+    const price = promo ? promo.price : plan.price
+    const promoNote = promo ? `Promo ${promo.code} (${promo.label}): −$${promo.discount}, was $${plan.price}` : ''
+
+    const amountCents = price * 100
     const userName = user.name || user.email?.split('@')[0] || 'Unknown'
     const userPhone = user.phone || null
     const userEmail = user.email || ''
@@ -204,7 +215,7 @@ export async function POST(request: NextRequest) {
       amount_cents: amountCents,
       payment_method: isFreeTrial ? 'trial' : method,
       cashapp_name: isFreeTrial ? null : cashAppName,
-      notes: [shipTo ? `Ship to: ${shipTo} · Box: ${plan.device}` : '', isTrialDevice(body?.device) ? `Device: ${body.device}` : '', referrer ? `Referred by: ${referrer.username}` : '']
+      notes: [promoNote, shipTo ? `Ship to: ${shipTo} · Box: ${plan.device}` : '', isTrialDevice(body?.device) ? `Device: ${body.device}` : '', referrer ? `Referred by: ${referrer.username}` : '']
         .filter(Boolean)
         .join(' · ') || null,
       status: 'pending',
@@ -240,7 +251,7 @@ export async function POST(request: NextRequest) {
         user_id: user.id,
         amount_cents: amountCents,
         payment_method: method,
-        payment_reference: `${cashAppName} (note ${paymentNoteCode(plan)})`,
+        payment_reference: `${cashAppName} (note ${paymentNoteCode(plan)})${promo ? ` · promo ${promo.code} −$${promo.discount}` : ''}`,
         status: 'pending',
         plan_id: plan.id,
       })
@@ -252,8 +263,9 @@ export async function POST(request: NextRequest) {
     await sendPushover(
       isFreeTrial
         ? '🎁 WKTV Free Trial Request'
-        : `${shipTo ? '📦 WKTV Box Order' : `💰 WKTV ${isRenewal ? 'Renewal' : 'Payment'}`} - $${plan.price} via ${methodLabel}`,
+        : `${shipTo ? '📦 WKTV Box Order' : `💰 WKTV ${isRenewal ? 'Renewal' : 'Payment'}`} - $${price} via ${methodLabel}`,
       `Plan: ${plan.name}\nCustomer: ${userName}\nEmail: ${userEmail}` +
+        (promo ? `\nPromo: ${promo.code} (−$${promo.discount}, regular $${plan.price})` : '') +
         (isFreeTrial ? '' : `\n${methodLabel}: ${cashAppName}\nNote code: ${paymentNoteCode(plan)}`) +
         (shipTo ? `\nShip ${plan.device} to: ${shipTo}` : '') +
         (requestedUsername ? `\nWants username: ${requestedUsername}` : '') +

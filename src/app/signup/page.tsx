@@ -22,6 +22,8 @@ function SignupContent() {
   // Start with the plan picked on the homepage (if any); the customer can change it here
   const [planId, setPlanId] = useState<string>(getPlan(searchParams.get('plan'))?.id || '')
   const plan = getPlan(planId)
+  // Keep a shared promo link (?promo=CODE) on the way to checkout
+  const promoParam = searchParams.get('promo') ? `&promo=${encodeURIComponent(searchParams.get('promo')!.slice(0, 32))}` : ''
   const [showWarning, setShowWarning] = useState(false)
 
   const [formData, setFormData] = useState({ name: '', email: '', phone: '', password: '' })
@@ -31,7 +33,7 @@ function SignupContent() {
   // Already signed in? Skip signup and go to checkout or the account page.
   useEffect(() => {
     fetch('/api/auth/me').then((r) => r.json()).then((d) => {
-      if (d.user) router.replace(plan ? `/pay?plan=${plan.id}` : '/dashboard')
+      if (d.user) router.replace(plan ? `/pay?plan=${plan.id}${promoParam}` : '/dashboard')
     }).catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -63,7 +65,7 @@ function SignupContent() {
         return
       }
       // Plan chosen -> straight to checkout (warning already shown). No plan -> account page.
-      router.push(finalPlan ? `/pay?plan=${finalPlan.id}&confirmed=1` : '/dashboard')
+      router.push(finalPlan ? `/pay?plan=${finalPlan.id}&confirmed=1${promoParam}` : '/dashboard')
     } catch {
       setError('Something went wrong. Please try again.')
       setLoading(false)
