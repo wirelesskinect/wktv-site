@@ -57,3 +57,18 @@ header.wrap .login { white-space: nowrap; flex-shrink: 0; margin-left: 0; }
   header.wrap .login { padding: 11px 14px; }
   header.wrap .login span { margin-left: 8px; }
 }
+
+/* ---- Language toggle (EN | ES) ---- */
+.lang-toggle{flex-shrink:0;display:inline-flex;align-items:center;gap:2px;height:42px;padding:3px;border:1px solid #3a3a40;border-radius:100px;background:transparent;color:#dddde4;font-family:inherit;font-size:12px;font-weight:800;letter-spacing:.05em;cursor:pointer;transition:border-color .2s}
+.lang-toggle span{display:grid;place-items:center;min-width:32px;height:34px;padding:0 8px;border-radius:100px;transition:background .2s,color .2s}
+.lang-toggle[data-lang=en] [data-l=en],.lang-toggle[data-lang=es] [data-l=es]{background:#e62932;color:#fff}
+.lang-toggle:hover{border-color:#e62932}
+.lang-toggle:focus-visible{outline:2px solid var(--red);outline-offset:3px}
+html[data-theme=light] .lang-toggle{border-color:#c9c9d1;color:#2a2a31}
+@media(max-width:650px){.lang-toggle{height:38px}.lang-toggle span{min-width:27px;height:30px;padding:0 6px;font-size:11px}}
+
+/* ---- Back to top: bigger, red, with a label ---- */
+.fx-top{width:auto;min-width:52px;height:52px;padding:0 18px;gap:8px;display:flex;align-items:center;border:0;border-radius:26px;background:linear-gradient(135deg,#ff3a46,#c81d28);font-size:18px;font-weight:800;box-shadow:0 10px 30px #0008,0 0 0 1px #ffffff22 inset}
+.fx-top::after{content:'Top';font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+html[lang=es] .fx-top::after{content:'Arriba'}
+@media(max-width:650px){.fx-top{height:44px;min-width:44px;padding:0 14px;border-radius:22px;font-size:16px}}
