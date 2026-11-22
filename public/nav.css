@@ -87,3 +87,10 @@ html[lang=es] .fx-top::after{content:'Arriba'}
  .nav-more.open .nav-more-menu{display:flex!important}
  .nav-more-menu a{padding:11px 14px!important;border-radius:8px!important;border:0!important}
 }
+
+/* Keep EN | ES, light/dark and Member login grouped on the right (950px and under) */
+@media (max-width:950px){
+ header.wrap .lang-toggle{margin-left:auto}
+ header.wrap .theme-toggle{margin-left:0!important}
+ header.wrap .login{margin-left:0!important}
+}
