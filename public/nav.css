@@ -72,3 +72,25 @@ html[data-theme=light] .lang-toggle{border-color:#c9c9d1;color:#2a2a31}
 .fx-top::after{content:'Top';font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
 html[lang=es] .fx-top::after{content:'Arriba'}
 @media(max-width:650px){.fx-top{height:44px;min-width:44px;padding:0 14px;border-radius:22px;font-size:16px}}
+
+/* ---- Tablet / narrow desktop (651-950px): keep the menu links visible ----
+   Shown as a row under the logo, with Help as a dropdown. The hamburger menu is
+   now only used on phones (650px and under). */
+@media (min-width:651px) and (max-width:950px){
+ header.wrap{flex-wrap:wrap!important;height:auto!important;padding-bottom:10px!important;row-gap:4px}
+ .nav-toggle{display:none!important}
+ header.wrap nav{display:flex!important;position:static!important;order:5;flex:0 0 100%;margin:0!important;flex-direction:row!important;align-items:center;justify-content:center;gap:28px;padding:10px 0 4px!important;font-size:14px;background:none!important;border:0!important;border-radius:0!important;box-shadow:none!important;max-height:none!important;overflow:visible!important;border-top:1px solid #ffffff14}
+ header.wrap nav>a{padding:0!important;border:0!important;border-radius:0!important;background:none!important}
+ header.wrap nav>a::after{display:block!important}
+ .nav-more>button{display:inline-flex!important}
+ .nav-more-menu{display:none!important;position:absolute!important;top:calc(100% + 14px);right:-12px;left:auto;min-width:210px;padding:8px!important;background:rgba(16,15,18,.97)!important;border:1px solid #3a2a2d!important;border-radius:12px!important;box-shadow:0 18px 40px #000a!important}
+ .nav-more.open .nav-more-menu{display:flex!important}
+ .nav-more-menu a{padding:11px 14px!important;border-radius:8px!important;border:0!important}
+}
+
+/* Keep EN | ES, light/dark and Member login grouped on the right (950px and under) */
+@media (max-width:950px){
+ header.wrap .lang-toggle{margin-left:auto}
+ header.wrap .theme-toggle{margin-left:0!important}
+ header.wrap .login{margin-left:0!important}
+}
