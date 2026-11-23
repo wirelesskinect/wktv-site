@@ -30,7 +30,7 @@ export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null)
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [copied, setCopied] = useState<'user' | 'pass' | 'ref' | null>(null)
+  const [copied, setCopied] = useState<'user' | 'pass' | 'ref' | 'code' | null>(null)
   const [showPass, setShowPass] = useState(false)
   const [linkOpen, setLinkOpen] = useState(false)
   const [linkUser, setLinkUser] = useState('')
@@ -61,7 +61,7 @@ export default function DashboardPage() {
       setLinkBusy(false)
     }
   }
-  const copy = (text: string, which: 'user' | 'pass' | 'ref') => {
+  const copy = (text: string, which: 'user' | 'pass' | 'ref' | 'code') => {
     navigator.clipboard?.writeText(text).then(() => { setCopied(which); setTimeout(() => setCopied(null), 1500) }).catch(() => {})
   }
 
@@ -220,6 +220,27 @@ export default function DashboardPage() {
 
         {/* Quick links */}
         <div className="grid gap-3 content-start">
+          {hasPlan && subscription?.username && (
+            <div className="tile" style={{ borderColor: 'rgba(238, 48, 47, 0.45)' }}>
+              <p className="font-bold">🎁 Refer a friend, get a free month</p>
+              <p className="text-sm text-muted mt-1">
+                Your friend gets a free 24-hour trial. If they buy a 1-year plan, we add <b className="text-white">1 free month</b> to your plan.
+              </p>
+              <p className="text-xs uppercase tracking-widest text-muted mt-4 mb-1">Your referral code</p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-2xl font-extrabold" style={{ fontFamily: 'var(--font-display)', overflowWrap: 'anywhere', minWidth: 0 }}>{subscription.username}</p>
+                <button type="button" className="text-xs link" onClick={() => copy(subscription.username || '', 'code')}>
+                  {copied === 'code' ? 'Copied ✓' : 'Copy code'}
+                </button>
+              </div>
+              <button type="button" className="btn-secondary w-full mt-4" onClick={() => copy(referralLink(subscription.username || ''), 'ref')}>
+                {copied === 'ref' ? 'Link copied ✓' : 'Copy my referral link'}
+              </button>
+              <p className="text-xs text-muted mt-3">
+                Your friend types this code in the Referral code box when they start their trial (the link fills it in for them). It has to match exactly, capital letters included.
+              </p>
+            </div>
+          )}
           <a href="/support.html#connect" className="tile">
             <p className="font-bold">📺 How to connect</p>
             <p className="text-sm text-muted">Setup steps for ONN, Fire TV, Android, and Apple.</p>
@@ -239,23 +260,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {hasPlan && subscription?.username && (
-        <div className="card mt-6">
-          <span className="eyebrow">Refer a friend</span>
-          <h2 className="text-2xl mt-2 mb-2">Give a free trial, get a free month</h2>
-          <p className="text-muted mb-4">
-            Send this link to a friend for a free 24-hour trial. If they buy a 1-year plan, we’ll add <b>1 free month</b> to your plan.
-            Your friend can also type your username, <b style={{ overflowWrap: "anywhere" }}>{subscription.username}</b>, in the referral box when they start their trial.
-          </p>
-          <div className="tile flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm font-bold break-all" style={{ minWidth: 0, flex: '1 1 220px' }}>{referralLink(subscription.username)}</p>
-            <button type="button" className="btn-secondary" onClick={() => copy(referralLink(subscription.username || ''), 'ref')}>
-              {copied === 'ref' ? 'Copied ✓' : 'Copy link'}
-            </button>
-          </div>
-          <p className="text-sm text-muted mt-3">The username has to be spelled exactly right, capital letters included, for the referral to count.</p>
-        </div>
-      )}
     </div>
   )
 }
